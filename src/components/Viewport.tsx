@@ -11,6 +11,7 @@ export interface ViewportProps {
   viewBounds: [number, number];
   children?: React.ReactNode;
   onZoomedEnd?: (e: PixiViewport) => void;
+  onMoved?: (e: PixiViewport) => void;
   onMovedEnd?: (e: PixiViewport) => void;
 }
 
@@ -26,6 +27,7 @@ const PixiComponentViewport = PixiComponent("Viewport", {
     worldWidth,
     app,
     onZoomedEnd = () => null,
+    onMoved = () => null,
     onMovedEnd = () => null,
     viewBounds,
   }: PixiComponentViewportProps) => {
@@ -47,7 +49,10 @@ const PixiComponentViewport = PixiComponent("Viewport", {
       .clampZoom({
         minScale: screenWidth / worldWidth,
       });
-    viewport.on("zoomed", onZoomedEnd).on("moved-end", onMovedEnd);
+    viewport
+      .on("zoomed", onZoomedEnd)
+      .on("moved", onMoved)
+      .on("moved-end", onMovedEnd);
 
     viewport.moveCenter(
       (viewBounds[1] - viewBounds[0]) / 2 + viewBounds[0],
@@ -64,7 +69,7 @@ const PixiComponentViewport = PixiComponent("Viewport", {
     _oldProps,
     { screenWidth, screenHeight, worldWidth, worldHeight, viewBounds }
   ) => {
-    // TODO: fix this up?
+    // TODO: adjust zoom level if view bounds get smaller
     viewport.resize(screenWidth, screenHeight, worldWidth, worldHeight);
     viewport.moveCenter(
       (viewBounds[1] - viewBounds[0]) / 2 + viewBounds[0],

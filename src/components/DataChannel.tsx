@@ -97,12 +97,11 @@ export const DataChannel: React.FC<Props> = ({
 
   const drawHighResData = useCallback(
     (g: PIXI.Graphics) => {
-      // TODO: draw buffer (half of width on each side)
       clearTimeout(highResTimeout.current);
 
       highResTimeout.current = setTimeout(() => {
         let [viewStart, viewEnd] = worldViewBounds;
-        const bufferPercent = DEBUG_MODE ? 0.1 : 0;
+        const bufferPercent = DEBUG_MODE ? 0.1 : 0; // TODO: support negative buffer (extended), need to clamp to worldBounds
         const bufferAmount = bufferPercent * (viewEnd - viewStart);
         viewStart += bufferAmount;
         viewEnd -= bufferAmount;
@@ -134,7 +133,6 @@ export const DataChannel: React.FC<Props> = ({
           const viewPercent = viewLength / viewLengthScreen;
 
           renderCount += highResData.length;
-          console.log(`rendering ${renderCount} points`);
 
           // data
           g.lineStyle({

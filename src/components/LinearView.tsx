@@ -61,10 +61,8 @@ export const LinearView: React.FC<Props> = ({
     [widthPixel]
   );
 
-  const onMovedEnd = useCallback((viewport) => {
-    console.log("movedEnd", viewport);
+  const onMoved = useCallback(({ viewport }) => {
     const { left, right } = viewport; // world pos
-    renderedPointCountRef.current = 0;
     setViewBounds([left, right]);
   }, []);
 
@@ -89,12 +87,16 @@ export const LinearView: React.FC<Props> = ({
           const targetMidpoint = parseFloat(e.currentTarget.value);
 
           const halfViewLength = 0.5 * viewLength;
-          // TODO: maintain width while clamping
+          const leftTarget = targetMidpoint - halfViewLength;
+          const rightTarget = targetMidpoint + halfViewLength;
 
-          setViewBounds([
-            Math.max(targetMidpoint - halfViewLength, worldStart),
-            Math.min(targetMidpoint + halfViewLength, worldEnd),
-          ]);
+          if (leftTarget < worldStart) {
+            setViewBounds([worldStart, worldStart + viewLength]);
+          } else if (rightTarget > worldEnd) {
+            setViewBounds([worldEnd - viewLength, worldEnd]);
+          } else {
+            setViewBounds([leftTarget, rightTarget]);
+          }
         }}
       />
       <div
@@ -120,8 +122,9 @@ export const LinearView: React.FC<Props> = ({
             worldWidth={worldLength}
             ref={viewportRef}
             onZoomedEnd={onZoomedEnd}
-            onMovedEnd={onMovedEnd}
+            onMoved={onMoved}
             viewBounds={viewBounds}
+            onMovedEnd={() => (renderedPointCountRef.current = 0)}
           >
             {channels.map((id, i) => {
               const channelHeight = heightPixel / channels.length;
