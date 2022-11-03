@@ -69,11 +69,11 @@ export const LinearView: React.FC<Props> = ({
   return (
     <>
       <div className="flex w-full justify-between">
-        <div>{worldStart}</div>
+        <div>{worldStart.toFixed()}</div>
         <div>
-          {viewBounds[0].toFixed(4)} - {viewBounds[1].toFixed(4)}
+          {viewBounds[0].toFixed(2)} - {viewBounds[1].toFixed(2)}
         </div>
-        <div>{worldEnd}</div>
+        <div>{worldEnd.toFixed()}</div>
       </div>
       <input
         className="w-full"

@@ -5,7 +5,7 @@ import { DATA_MAX, DATA_MIN, getRandomData } from "../fake-data";
 import { chunk, mean } from "lodash-es";
 
 const DATA_RANGE = DATA_MAX - DATA_MIN;
-const DEBUG_MODE = true;
+const DEBUG_MODE = false;
 const BACKGROUND_COLOR = 0xaaaaaa;
 
 const colors = [

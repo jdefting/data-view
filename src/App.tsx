@@ -5,7 +5,6 @@ import { useResizeDetector } from "react-resize-detector";
 
 const App = function App() {
   const [channelCount, setChannelCount] = useState(1);
-  const [channelPointsPower, setChannelPointsPower] = useState(5);
   const [linesPerChannel, setLinesPerChannel] = useState(1);
   const [pointsRendered, setPointsRendered] = useState(0);
 
@@ -19,7 +18,7 @@ const App = function App() {
     setPointsRendered(renderedPointCount.current);
   }, 100);
 
-  const pointsPerChannel = 10 ** channelPointsPower;
+  const pointsPerChannel = 100_000;
 
   const channels = useMemo(() => {
     const channels = [];
@@ -33,13 +32,13 @@ const App = function App() {
 
   return (
     <div
-      className="App flex flex-col items-center justify-center"
+      className="App flex flex-col items-center justify-center gap-3"
       style={{
         height: "100vh",
         width: "100vw",
       }}
     >
-      <div className="flex flex-col gap-3">
+      <div className="flex gap-3 flex-col  border border-gray-600 p-2 ">
         <div>
           Channels:{" "}
           <input
@@ -61,22 +60,6 @@ const App = function App() {
           />
         </div>
         <div>
-          Points/Channel (10^x):{" "}
-          <input
-            type="number"
-            value={channelPointsPower}
-            onChange={(e) => {
-              setChannelPointsPower(parseInt(e.currentTarget.value));
-            }}
-          />
-        </div>
-        <div>
-          Total Data Points:{" "}
-          {(channelCount * pointsPerChannel * linesPerChannel)
-            .toString()
-            .replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-        </div>
-        <div>
           Points Rendered (theoretical):{" "}
           {(channelCount * linesPerChannel * Math.round(width || 1))
             .toString()
@@ -87,7 +70,7 @@ const App = function App() {
           {pointsRendered.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
         </div>
       </div>
-      <div className="h-1/2 w-11/12">
+      <div className="h-2/3 w-11/12">
         <div className="w-full h-full" ref={ref}>
           {height && width && (
             <LinearView
