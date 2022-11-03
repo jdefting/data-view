@@ -142,6 +142,7 @@ export const LinearView: React.FC<Props> = ({
                   onPointsRendered={(count) => {
                     renderedPointCountRef.current += count;
                   }}
+                  worldBounds={worldBounds}
                 />
               );
             })}

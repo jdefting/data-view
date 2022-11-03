@@ -40,6 +40,7 @@ interface Props {
   screenWidth: number;
   y: number;
   onPointsRendered: (count: number) => void;
+  worldBounds: [number, number];
 }
 
 export const DataChannel: React.FC<Props> = ({
@@ -51,6 +52,7 @@ export const DataChannel: React.FC<Props> = ({
   screenWidth,
   y,
   onPointsRendered,
+  worldBounds,
 }) => {
   const highResTimeout = useRef<number>(0);
 
@@ -101,13 +103,18 @@ export const DataChannel: React.FC<Props> = ({
 
       highResTimeout.current = setTimeout(() => {
         let [viewStart, viewEnd] = worldViewBounds;
-        const bufferPercent = DEBUG_MODE ? 0.1 : 0; // TODO: support negative buffer (extended), need to clamp to worldBounds
-        const bufferAmount = bufferPercent * (viewEnd - viewStart);
-        viewStart += bufferAmount;
-        viewEnd -= bufferAmount;
+        const bufferPercent = DEBUG_MODE ? -0.1 : 0.5;
+
+        const originalViewLength = viewEnd - viewStart;
+        const bufferAmount = bufferPercent * originalViewLength;
+
+        viewStart = Math.max(viewStart - bufferAmount, worldBounds[0]);
+        viewEnd = Math.min(viewEnd + bufferAmount, worldBounds[1]);
+
+        const bufferRatio = (viewEnd - viewStart) / originalViewLength;
 
         const viewLength = viewEnd - viewStart;
-        const viewLengthScreen = screenWidth * (1 - bufferPercent * 2);
+        const viewLengthScreen = screenWidth * bufferRatio;
 
         g.clear();
 
