@@ -83,7 +83,7 @@ export const DataChannel: React.FC<Props> = ({
         // data
         const lowResData = computeData(data, worldWidth, height);
         g.lineStyle({
-          width: 2,
+          width: 1,
           color,
           join: PIXI.LINE_JOIN.BEVEL,
         });
@@ -123,6 +123,7 @@ export const DataChannel: React.FC<Props> = ({
         g.drawRect(viewStart, 0, viewLength, height);
         g.endFill();
 
+        console.log('drawing hi res');
         let renderCount = 0;
         dataLines.forEach(({ data, color }) => {
           // only draw data in view
@@ -131,7 +132,7 @@ export const DataChannel: React.FC<Props> = ({
           const startIndex = startPercent * data.length;
           const endIndex = endPercent * data.length;
           const dataInView = data.slice(startIndex, endIndex);
-          const pointsPerPixel = dataInView.length / viewLengthScreen;
+          const pointsPerPixel = Math.max(dataInView.length / viewLengthScreen, 1);
 
           const dataChunks = chunk(dataInView, pointsPerPixel);
           const highResData = dataChunks.map((chunk) =>

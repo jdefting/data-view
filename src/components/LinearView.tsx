@@ -66,12 +66,15 @@ export const LinearView: React.FC<Props> = ({
     setViewBounds([left, right]);
   }, []);
 
+  const viewWidth = viewBounds[1] - viewBounds[0]
+
   return (
     <>
       <div className="flex w-full justify-between">
         <div>{worldStart.toFixed()}</div>
         <div>
           {viewBounds[0].toFixed(2)} - {viewBounds[1].toFixed(2)}
+          {' '}({viewWidth.toFixed()})
         </div>
         <div>{worldEnd.toFixed()}</div>
       </div>
