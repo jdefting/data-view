@@ -18,12 +18,12 @@ const convertToWorldY = (value: number, channelHeight: number) => {
   return (1 - percent) * channelHeight;
 };
 
-const computeData = (
+const aggregateData = (
   values: number[],
   viewWidth: number,
   channelHeight: number
 ): number[] => {
-  const pointsPerPixel = values.length / viewWidth;
+  const pointsPerPixel = Math.max(values.length / viewWidth, 1);
   const dataChunks = chunk(values, pointsPerPixel);
   return dataChunks
     .map((chunk) => mean(chunk))
@@ -81,7 +81,7 @@ export const DataChannel: React.FC<Props> = ({
 
       dataLines.forEach(({ data, color }) => {
         // data
-        const lowResData = computeData(data, worldWidth, height);
+        const lowResData = aggregateData(data, worldWidth, height);
         g.lineStyle({
           width: 1,
           color,
@@ -131,12 +131,8 @@ export const DataChannel: React.FC<Props> = ({
           const startIndex = startPercent * data.length;
           const endIndex = endPercent * data.length;
           const dataInView = data.slice(startIndex, endIndex);
-          const pointsPerPixel = Math.max(dataInView.length / viewLengthScreen, 1);
+          const highResData = aggregateData(dataInView, viewLengthScreen, height);
 
-          const dataChunks = chunk(dataInView, pointsPerPixel);
-          const highResData = dataChunks.map((chunk) =>
-            convertToWorldY(mean(chunk), height)
-          );
           const viewPercent = viewLength / viewLengthScreen;
 
           renderCount += highResData.length;
@@ -149,7 +145,7 @@ export const DataChannel: React.FC<Props> = ({
           });
           g.moveTo(viewStart, highResData[0]);
           highResData.forEach((point, i) => {
-            g.lineTo(viewStart + i * (viewLength / dataChunks.length), point);
+            g.lineTo(viewStart + i * (viewLength / highResData.length), point);
           });
         });
 

@@ -18,7 +18,7 @@ const App = function App() {
     setPointsRendered(renderedPointCount.current);
   }, 100);
 
-  const pointsPerChannel = 100_000;
+  const pointsPerChannel = 10_000;
 
   const channels = useMemo(() => {
     const channels = [];
