@@ -26,8 +26,7 @@ const aggregateData = (
   const pointsPerPixel = Math.max(values.length / viewWidth, 1);
   const dataChunks = chunk(values, pointsPerPixel);
   return dataChunks
-    .map((chunk) => mean(chunk))
-    .map((point) => convertToWorldY(point, channelHeight));
+    .map((chunk) => convertToWorldY(mean(chunk), channelHeight));
 };
 
 interface Props {
