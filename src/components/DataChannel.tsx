@@ -1,11 +1,16 @@
 import React, { useCallback, useMemo, useRef } from "react";
-import { Container, Graphics } from "@inlet/react-pixi";
+import {
+  Container,
+  Graphics,
+  ParticleContainer,
+  useTick,
+} from "@inlet/react-pixi";
 import * as PIXI from "pixi.js";
 import { DATA_MAX, DATA_MIN, getRandomData } from "../fake-data";
 import { chunk, mean } from "lodash-es";
 
 const DATA_RANGE = DATA_MAX - DATA_MIN;
-const DEBUG_MODE = false;
+const DEBUG_MODE = true;
 const BACKGROUND_COLOR = 0xaaaaaa;
 
 const colors = [
@@ -25,8 +30,7 @@ const aggregateData = (
 ): number[] => {
   const pointsPerPixel = Math.max(values.length / viewWidth, 1);
   const dataChunks = chunk(values, pointsPerPixel);
-  return dataChunks
-    .map((chunk) => convertToWorldY(mean(chunk), channelHeight));
+  return dataChunks.map((chunk) => convertToWorldY(mean(chunk), channelHeight));
 };
 
 interface Props {
@@ -54,6 +58,7 @@ export const DataChannel: React.FC<Props> = ({
   worldBounds,
 }) => {
   const highResTimeout = useRef<number>(0);
+  const highResRef = useRef<PIXI.Graphics>(null);
 
   const dataLines = useMemo(() => {
     const lines = [];
@@ -80,7 +85,7 @@ export const DataChannel: React.FC<Props> = ({
 
       dataLines.forEach(({ data, color }) => {
         // data
-        const lowResData = aggregateData(data, worldWidth, height);
+        const lowResData = aggregateData(data, worldWidth * 2, height);
         g.lineStyle({
           width: 1,
           color,
@@ -102,16 +107,12 @@ export const DataChannel: React.FC<Props> = ({
 
       highResTimeout.current = setTimeout(() => {
         let [viewStart, viewEnd] = worldViewBounds;
-        const bufferPercent = DEBUG_MODE ? -0.1 : 0.5;
-
+        const bufferPercent = DEBUG_MODE ? -0.1 : 0;
         const originalViewLength = viewEnd - viewStart;
         const bufferAmount = bufferPercent * originalViewLength;
-
         viewStart = Math.max(viewStart - bufferAmount, worldBounds[0]);
         viewEnd = Math.min(viewEnd + bufferAmount, worldBounds[1]);
-
         const bufferRatio = (viewEnd - viewStart) / originalViewLength;
-
         const viewLength = viewEnd - viewStart;
         const viewLengthScreen = screenWidth * bufferRatio;
 
@@ -130,7 +131,11 @@ export const DataChannel: React.FC<Props> = ({
           const startIndex = startPercent * data.length;
           const endIndex = endPercent * data.length;
           const dataInView = data.slice(startIndex, endIndex);
-          const highResData = aggregateData(dataInView, viewLengthScreen, height);
+          const highResData = aggregateData(
+            dataInView,
+            viewLengthScreen,
+            height
+          );
 
           const viewPercent = viewLength / viewLengthScreen;
 
@@ -147,7 +152,6 @@ export const DataChannel: React.FC<Props> = ({
             g.lineTo(viewStart + i * (viewLength / highResData.length), point);
           });
         });
-
         onPointsRendered(renderCount);
       }, 100);
     },
@@ -168,10 +172,36 @@ export const DataChannel: React.FC<Props> = ({
     [worldWidth, height]
   );
 
+  useTick((delta) => {
+    if (Math.round(performance.now()) % 5 !== 0) {
+      return;
+    }
+
+    if (
+      !highResRef.current ||
+      highResRef.current.geometry.graphicsData.length < 2
+    ) {
+      return;
+    }
+
+    // console.log("rerender", delta);
+    // console.log(highResRef);
+
+    highResRef.current.geometry.graphicsData[1].lineStyle.width =
+      ((worldViewBounds[1] - worldViewBounds[0]) / screenWidth) * 2;
+    highResRef.current.geometry.invalidate();
+  });
+
   return (
     <Container y={y}>
       <Graphics x={0} draw={drawLowResData} interactiveChildren={false} />
-      <Graphics x={0} draw={drawHighResData} interactiveChildren={false} />
+      <Graphics
+        ref={highResRef}
+        x={0}
+        draw={drawHighResData}
+        interactiveChildren={false}
+      />
+      <ParticleContainer>{}</ParticleContainer>
       <Graphics draw={drawLine} y={height + 1} />
     </Container>
   );

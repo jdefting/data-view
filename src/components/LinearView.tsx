@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from "react";
-import { Stage, Graphics } from "@inlet/react-pixi";
+import { Stage, Graphics, useTick } from "@inlet/react-pixi";
 import * as PIXI from "pixi.js";
 import { Viewport as PixiViewport } from "pixi-viewport";
 import { Viewport } from "./Viewport";
@@ -66,15 +66,15 @@ export const LinearView: React.FC<Props> = ({
     setViewBounds([left, right]);
   }, []);
 
-  const viewWidth = viewBounds[1] - viewBounds[0]
+  const viewWidth = viewBounds[1] - viewBounds[0];
 
   return (
     <>
       <div className="flex w-full justify-between">
         <div>{worldStart.toFixed()}</div>
         <div>
-          {viewBounds[0].toFixed(2)} - {viewBounds[1].toFixed(2)}
-          {' '}({viewWidth.toFixed()})
+          {viewBounds[0].toFixed(2)} - {viewBounds[1].toFixed(2)} (
+          {viewWidth.toFixed()})
         </div>
         <div>{worldEnd.toFixed()}</div>
       </div>
