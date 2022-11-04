@@ -123,7 +123,6 @@ export const DataChannel: React.FC<Props> = ({
         g.drawRect(viewStart, 0, viewLength, height);
         g.endFill();
 
-        console.log('drawing hi res');
         let renderCount = 0;
         dataLines.forEach(({ data, color }) => {
           // only draw data in view
