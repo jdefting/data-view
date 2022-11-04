@@ -32,7 +32,7 @@ const App = function App() {
 
   return (
     <div
-      className="App flex flex-col items-center justify-center gap-3"
+      className="App flex flex-col items-center justify-center gap-3 bg-gray-900 text-gray-100"
       style={{
         height: "100vh",
         width: "100vw",
