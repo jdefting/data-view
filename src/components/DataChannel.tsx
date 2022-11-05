@@ -1,13 +1,9 @@
-import React, { useCallback, useMemo, useRef } from "react";
-import {
-  Container,
-  Graphics,
-  ParticleContainer,
-  useTick,
-} from "@inlet/react-pixi";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import simplify from "simplify-js";
+import { Container, Graphics } from "@inlet/react-pixi";
 import * as PIXI from "pixi.js";
 import { DATA_MAX, DATA_MIN, getRandomData } from "../fake-data";
-import { chunk, mean } from "lodash-es";
+import { chunk } from "lodash-es";
 
 const DATA_RANGE = DATA_MAX - DATA_MIN;
 const DEBUG_MODE = true;
@@ -30,7 +26,9 @@ const aggregateData = (
 ): number[] => {
   const pointsPerPixel = Math.max(values.length / viewWidth, 1);
   const dataChunks = chunk(values, pointsPerPixel);
-  return dataChunks.map((chunk) => convertToWorldY(mean(chunk), channelHeight));
+  return dataChunks.map((chunk) =>
+    convertToWorldY(Math.min(...chunk), channelHeight)
+  );
 };
 
 interface Props {
@@ -58,7 +56,9 @@ export const DataChannel: React.FC<Props> = ({
   worldBounds,
 }) => {
   const highResTimeout = useRef<number>(0);
+  const realTimeout = useRef<number>(0);
   const highResRef = useRef<PIXI.Graphics>(null);
+  const lowResRef = useRef<PIXI.Graphics>(null);
 
   const dataLines = useMemo(() => {
     const lines = [];
@@ -86,15 +86,20 @@ export const DataChannel: React.FC<Props> = ({
       dataLines.forEach(({ data, color }) => {
         // data
         const lowResData = aggregateData(data, worldWidth * 2, height);
+        const points = lowResData.map((y, i) => ({
+          x: i,
+          y,
+        }));
+        const simplePoints = simplify(points, 5);
+
         g.lineStyle({
           width: 1,
           color,
           join: PIXI.LINE_JOIN.BEVEL,
         });
-
-        g.moveTo(0, lowResData[0]);
-        lowResData.forEach((point, i) => {
-          g.lineTo(i, point);
+        g.moveTo(0, simplePoints[0].y);
+        simplePoints.forEach(({ x, y }) => {
+          g.lineTo(x, y);
         });
       });
     },
@@ -137,19 +142,28 @@ export const DataChannel: React.FC<Props> = ({
             height
           );
 
-          const viewPercent = viewLength / viewLengthScreen;
-
-          renderCount += highResData.length;
-
           // data
           g.lineStyle({
-            width: viewPercent * 3,
+            width:
+              ((worldViewBounds[1] - worldViewBounds[0]) / screenWidth) * 3,
             color: DEBUG_MODE ? color + 0xaaaaaa : color,
             join: PIXI.LINE_JOIN.BEVEL,
           });
           g.moveTo(viewStart, highResData[0]);
-          highResData.forEach((point, i) => {
-            g.lineTo(viewStart + i * (viewLength / highResData.length), point);
+
+          const points = highResData.map((y, i) => ({
+            x: viewStart + i * (viewLength / highResData.length),
+            y,
+          }));
+
+          let simplePoints = simplify(points, 5);
+          if (simplePoints.length < 100) {
+            simplePoints = points;
+          }
+          renderCount += simplePoints.length;
+
+          simplePoints.forEach(({ x, y }) => {
+            g.lineTo(x, y);
           });
         });
         onPointsRendered(renderCount);
@@ -172,36 +186,102 @@ export const DataChannel: React.FC<Props> = ({
     [worldWidth, height]
   );
 
-  useTick((delta) => {
-    if (Math.round(performance.now()) % 5 !== 0) {
+  const lastScaleChange = useRef<number>(0);
+  const viewWidth = Math.round(worldViewBounds[1] - worldViewBounds[0]);
+  useEffect(() => {
+    if (!highResRef.current || !lowResRef.current) {
       return;
     }
 
-    if (
-      !highResRef.current ||
-      highResRef.current.geometry.graphicsData.length < 2
-    ) {
+    const now = performance.now();
+
+    if (now - lastScaleChange.current < 500) {
       return;
     }
 
-    // console.log("rerender", delta);
-    // console.log(highResRef);
+    lastScaleChange.current = now;
 
-    highResRef.current.geometry.graphicsData[1].lineStyle.width =
-      ((worldViewBounds[1] - worldViewBounds[0]) / screenWidth) * 2;
+    const newWidth = (viewWidth / screenWidth) * 3;
+    highResRef.current.geometry.graphicsData.forEach((graphic) => {
+      graphic.lineStyle.width = newWidth;
+    });
     highResRef.current.geometry.invalidate();
-  });
+
+    lowResRef.current.geometry.graphicsData.forEach((graphic) => {
+      graphic.lineStyle.width = newWidth;
+    });
+    lowResRef.current.geometry.invalidate();
+  }, [viewWidth]);
+
+  const drawRealData = useCallback(
+    (g: PIXI.Graphics) => {
+      clearTimeout(realTimeout.current);
+
+      realTimeout.current = setTimeout(() => {
+        let [viewStart, viewEnd] = worldViewBounds;
+        const bufferPercent = DEBUG_MODE ? -0.2 : 0;
+        const originalViewLength = viewEnd - viewStart;
+        const bufferAmount = bufferPercent * originalViewLength;
+        viewStart = Math.max(viewStart - bufferAmount, worldBounds[0]);
+        viewEnd = Math.min(viewEnd + bufferAmount, worldBounds[1]);
+        const bufferRatio = (viewEnd - viewStart) / originalViewLength;
+        const viewLength = viewEnd - viewStart;
+        const viewLengthScreen = screenWidth * bufferRatio;
+
+        g.clear();
+
+        dataLines.forEach(({ data, color }) => {
+          // only draw data in view
+          const startPercent = viewStart / worldWidth;
+          const endPercent = viewEnd / worldWidth;
+          const startIndex = startPercent * data.length;
+          const endIndex = endPercent * data.length;
+          const dataInView = data.slice(startIndex, endIndex);
+
+          const highResData = dataInView.map((y) => convertToWorldY(y, height));
+
+          // data
+          g.lineStyle({
+            width: (worldViewBounds[1] - worldViewBounds[0]) / screenWidth,
+            color: !DEBUG_MODE ? color + 0xaaaaaa : color,
+            join: PIXI.LINE_JOIN.BEVEL,
+          });
+          g.moveTo(viewStart, highResData[0]);
+
+          const points = highResData.map((y, i) => ({
+            x: viewStart + i * (viewLength / highResData.length),
+            y,
+          }));
+
+          // let simplePoints = simplify(points, 5);
+          // if (simplePoints.length < 100) {
+          //   simplePoints = points;
+          // }
+
+          points.forEach(({ x, y }) => {
+            g.lineTo(x, y);
+          });
+        });
+      }, 1000);
+    },
+    [dataLines, screenWidth, worldWidth, height, worldViewBounds]
+  );
 
   return (
     <Container y={y}>
-      <Graphics x={0} draw={drawLowResData} interactiveChildren={false} />
+      <Graphics
+        x={0}
+        ref={lowResRef}
+        draw={drawLowResData}
+        interactiveChildren={false}
+      />
       <Graphics
         ref={highResRef}
         x={0}
         draw={drawHighResData}
         interactiveChildren={false}
       />
-      <ParticleContainer>{}</ParticleContainer>
+      <Graphics x={0} draw={drawRealData} interactiveChildren={false} />
       <Graphics draw={drawLine} y={height + 1} />
     </Container>
   );
