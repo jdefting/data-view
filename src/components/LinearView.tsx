@@ -3,7 +3,7 @@ import { Stage, Graphics, useTick } from "@inlet/react-pixi";
 import * as PIXI from "pixi.js";
 import { Viewport as PixiViewport } from "pixi-viewport";
 import { Viewport } from "./Viewport";
-import { DataChannel } from "./DataChannel";
+import { DataChannel, MockEvent } from "./DataChannel";
 
 interface Props {
   channels: number[];
@@ -12,6 +12,7 @@ interface Props {
   renderedPointCountRef: React.MutableRefObject<number>;
   heightPixel: number;
   widthPixel: number;
+  events?: MockEvent[];
 }
 
 export const LinearView: React.FC<Props> = ({
@@ -21,6 +22,7 @@ export const LinearView: React.FC<Props> = ({
   renderedPointCountRef,
   heightPixel,
   widthPixel,
+  events,
 }) => {
   const viewportRef = useRef<PixiViewport>(null);
 
@@ -28,7 +30,7 @@ export const LinearView: React.FC<Props> = ({
   const [cursorWidth, setCursorWidth] = useState(2);
   const [worldBounds, setWorldBounds] = useState<[number, number]>([
     0,
-    widthPixel * 10,
+    widthPixel * 2,
   ]);
   const [worldStart, worldEnd] = worldBounds;
   const worldLength = worldEnd - worldStart;
@@ -42,6 +44,7 @@ export const LinearView: React.FC<Props> = ({
         width: cursorWidth,
         color: 0x000,
         join: PIXI.LINE_JOIN.BEVEL,
+        native: true,
       });
       g.lineTo(0, heightPixel || 0);
     },
@@ -53,6 +56,8 @@ export const LinearView: React.FC<Props> = ({
       if (!widthPixel) {
         return;
       }
+
+      console.log("scale", viewport.scale);
 
       // fixing cursor position broken until we fix viewport breaking on resize
       setCursorX((viewport.screenWidthInWorldPixels / widthPixel) * cursorX);
@@ -146,6 +151,7 @@ export const LinearView: React.FC<Props> = ({
                     renderedPointCountRef.current += count;
                   }}
                   worldBounds={worldBounds}
+                  events={events}
                 />
               );
             })}

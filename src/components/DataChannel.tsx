@@ -2,11 +2,10 @@ import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import simplify from "simplify-js";
 import { Container, Graphics } from "@inlet/react-pixi";
 import * as PIXI from "pixi.js";
-import { DATA_MAX, DATA_MIN, getRandomData } from "../fake-data";
+import { getRandomData } from "../fake-data";
 import { chunk } from "lodash-es";
 
-const DATA_RANGE = DATA_MAX - DATA_MIN;
-const DEBUG_MODE = true;
+const DEBUG_MODE = false;
 const BACKGROUND_COLOR = 0xaaaaaa;
 
 const colors = [
@@ -14,21 +13,34 @@ const colors = [
   0x70c1b3,
 ];
 
-const convertToWorldY = (value: number, channelHeight: number) => {
-  const percent = value / DATA_RANGE;
-  return (1 - percent) * channelHeight;
-};
+export interface MockEvent {
+  name: string;
+  values: number[];
+}
 
 const aggregateData = (
   values: number[],
   viewWidth: number,
-  channelHeight: number
+  channelHeight: number,
+  min: number,
+  max: number
 ): number[] => {
   const pointsPerPixel = Math.max(values.length / viewWidth, 1);
   const dataChunks = chunk(values, pointsPerPixel);
-  return dataChunks.map((chunk) =>
-    convertToWorldY(Math.min(...chunk), channelHeight)
-  );
+  return dataChunks.map((chunk) => {
+    const value = Math.max(...chunk);
+    const percent = value / max;
+
+    return (1 - percent) * channelHeight;
+  });
+};
+
+const getLineWidth = (
+  worldWidth: number,
+  worldViewBounds: [number, number]
+) => {
+  const viewWidth = Math.round(worldViewBounds[1] - worldViewBounds[0]);
+  return 2 * (viewWidth / worldWidth);
 };
 
 interface Props {
@@ -42,6 +54,7 @@ interface Props {
   y: number;
   onPointsRendered: (count: number) => void;
   worldBounds: [number, number];
+  events?: MockEvent[];
 }
 
 export const DataChannel: React.FC<Props> = ({
@@ -54,9 +67,9 @@ export const DataChannel: React.FC<Props> = ({
   y,
   onPointsRendered,
   worldBounds,
+  events,
 }) => {
   const highResTimeout = useRef<number>(0);
-  const realTimeout = useRef<number>(0);
   const highResRef = useRef<PIXI.Graphics>(null);
   const lowResRef = useRef<PIXI.Graphics>(null);
 
@@ -64,14 +77,21 @@ export const DataChannel: React.FC<Props> = ({
     const lines = [];
 
     for (let i = 0; i < lineCount; i++) {
+      let data = getRandomData(dataCount);
+      if (events && events[i]) {
+        data = events[i].values;
+      }
+
       lines.push({
-        data: getRandomData(dataCount),
+        data,
         color: colors[i % colors.length],
+        max: Math.max(...data),
+        min: Math.min(...data),
       });
     }
 
     return lines;
-  }, [dataCount, lineCount]);
+  }, [dataCount, lineCount, events]);
 
   const drawLowResData = useCallback(
     (g: PIXI.Graphics) => {
@@ -83,19 +103,26 @@ export const DataChannel: React.FC<Props> = ({
       g.drawRect(0, 0, worldWidth, height);
       g.endFill();
 
-      dataLines.forEach(({ data, color }) => {
+      dataLines.forEach(({ data, color, min, max }) => {
         // data
-        const lowResData = aggregateData(data, worldWidth * 2, height);
+        const lowResData = aggregateData(
+          data,
+          worldWidth * 2,
+          height,
+          min,
+          max
+        );
         const points = lowResData.map((y, i) => ({
-          x: i,
+          x: worldBounds[0] + i * (worldWidth / lowResData.length),
           y,
         }));
         const simplePoints = simplify(points, 5);
 
         g.lineStyle({
-          width: 1,
+          width: getLineWidth(worldWidth, worldViewBounds),
           color,
           join: PIXI.LINE_JOIN.BEVEL,
+          native: true,
         });
         g.moveTo(0, simplePoints[0].y);
         simplePoints.forEach(({ x, y }) => {
@@ -129,7 +156,7 @@ export const DataChannel: React.FC<Props> = ({
         g.endFill();
 
         let renderCount = 0;
-        dataLines.forEach(({ data, color }) => {
+        dataLines.forEach(({ data, color, min, max }) => {
           // only draw data in view
           const startPercent = viewStart / worldWidth;
           const endPercent = viewEnd / worldWidth;
@@ -139,15 +166,17 @@ export const DataChannel: React.FC<Props> = ({
           const highResData = aggregateData(
             dataInView,
             viewLengthScreen,
-            height
+            height,
+            min,
+            max
           );
 
           // data
           g.lineStyle({
-            width:
-              ((worldViewBounds[1] - worldViewBounds[0]) / screenWidth) * 3,
+            width: getLineWidth(worldWidth, worldViewBounds),
             color: DEBUG_MODE ? color + 0xaaaaaa : color,
             join: PIXI.LINE_JOIN.BEVEL,
+            native: true,
           });
           g.moveTo(viewStart, highResData[0]);
 
@@ -186,86 +215,32 @@ export const DataChannel: React.FC<Props> = ({
     [worldWidth, height]
   );
 
-  const lastScaleChange = useRef<number>(0);
-  const viewWidth = Math.round(worldViewBounds[1] - worldViewBounds[0]);
-  useEffect(() => {
-    if (!highResRef.current || !lowResRef.current) {
-      return;
-    }
-
-    const now = performance.now();
-
-    if (now - lastScaleChange.current < 500) {
-      return;
-    }
-
-    lastScaleChange.current = now;
-
-    const newWidth = (viewWidth / screenWidth) * 3;
-    highResRef.current.geometry.graphicsData.forEach((graphic) => {
-      graphic.lineStyle.width = newWidth;
-    });
-    highResRef.current.geometry.invalidate();
-
-    lowResRef.current.geometry.graphicsData.forEach((graphic) => {
-      graphic.lineStyle.width = newWidth;
-    });
-    lowResRef.current.geometry.invalidate();
-  }, [viewWidth]);
-
-  const drawRealData = useCallback(
-    (g: PIXI.Graphics) => {
-      clearTimeout(realTimeout.current);
-
-      realTimeout.current = setTimeout(() => {
-        let [viewStart, viewEnd] = worldViewBounds;
-        const bufferPercent = DEBUG_MODE ? -0.2 : 0;
-        const originalViewLength = viewEnd - viewStart;
-        const bufferAmount = bufferPercent * originalViewLength;
-        viewStart = Math.max(viewStart - bufferAmount, worldBounds[0]);
-        viewEnd = Math.min(viewEnd + bufferAmount, worldBounds[1]);
-        const bufferRatio = (viewEnd - viewStart) / originalViewLength;
-        const viewLength = viewEnd - viewStart;
-        const viewLengthScreen = screenWidth * bufferRatio;
-
-        g.clear();
-
-        dataLines.forEach(({ data, color }) => {
-          // only draw data in view
-          const startPercent = viewStart / worldWidth;
-          const endPercent = viewEnd / worldWidth;
-          const startIndex = startPercent * data.length;
-          const endIndex = endPercent * data.length;
-          const dataInView = data.slice(startIndex, endIndex);
-
-          const highResData = dataInView.map((y) => convertToWorldY(y, height));
-
-          // data
-          g.lineStyle({
-            width: (worldViewBounds[1] - worldViewBounds[0]) / screenWidth,
-            color: !DEBUG_MODE ? color + 0xaaaaaa : color,
-            join: PIXI.LINE_JOIN.BEVEL,
-          });
-          g.moveTo(viewStart, highResData[0]);
-
-          const points = highResData.map((y, i) => ({
-            x: viewStart + i * (viewLength / highResData.length),
-            y,
-          }));
-
-          // let simplePoints = simplify(points, 5);
-          // if (simplePoints.length < 100) {
-          //   simplePoints = points;
-          // }
-
-          points.forEach(({ x, y }) => {
-            g.lineTo(x, y);
-          });
-        });
-      }, 1000);
-    },
-    [dataLines, screenWidth, worldWidth, height, worldViewBounds]
-  );
+  // const lastScaleChange = useRef<number>(0);
+  //
+  // const lineWidth = getLineWidth(worldWidth, worldViewBounds);
+  // useEffect(() => {
+  //   if (!highResRef.current || !lowResRef.current) {
+  //     return;
+  //   }
+  //   console.log("lineWidth:", lineWidth);
+  //   const now = performance.now();
+  //
+  //   if (now - lastScaleChange.current < 500) {
+  //     return;
+  //   }
+  //
+  //   lastScaleChange.current = now;
+  //
+  //   highResRef.current.geometry.graphicsData.forEach((graphic) => {
+  //     graphic.lineStyle.width = lineWidth;
+  //   });
+  //   highResRef.current.geometry.invalidate();
+  //
+  //   lowResRef.current.geometry.graphicsData.forEach((graphic) => {
+  //     graphic.lineStyle.width = lineWidth;
+  //   });
+  //   lowResRef.current.geometry.invalidate();
+  // }, [lineWidth]);
 
   return (
     <Container y={y}>
@@ -281,7 +256,6 @@ export const DataChannel: React.FC<Props> = ({
         draw={drawHighResData}
         interactiveChildren={false}
       />
-      <Graphics x={0} draw={drawRealData} interactiveChildren={false} />
       <Graphics draw={drawLine} y={height + 1} />
     </Container>
   );
