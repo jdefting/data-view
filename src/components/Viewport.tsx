@@ -51,7 +51,11 @@ const PixiComponentViewport = PixiComponent("Viewport", {
       });
     viewport
       .on("zoomed", onZoomedEnd)
-      .on("moved", onMoved)
+      .on("moved", ({ viewport }) => {
+        // TODO: don't move if new viewBounds = old view bounds
+
+        onMoved(viewport);
+      })
       .on("moved-end", onMovedEnd);
 
     viewport.moveCenter(
@@ -71,6 +75,7 @@ const PixiComponentViewport = PixiComponent("Viewport", {
   ) => {
     // TODO: adjust zoom level if view bounds get smaller
     viewport.resize(screenWidth, screenHeight, worldWidth, worldHeight);
+
     viewport.moveCenter(
       (viewBounds[1] - viewBounds[0]) / 2 + viewBounds[0],
       worldHeight / 2

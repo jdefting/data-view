@@ -1,16 +1,8 @@
-import { random } from "lodash-es";
+import { randomGeometricBrownianMotion } from "d3fc";
 
-export const DATA_MAX = 100;
-export const DATA_MIN = 0;
-
-export const getRandomData = (n: number) => {
-  const values = [];
-
-  for (let i = 0; i < n; i++) {
-    values.push(random(25, 75));
-  }
-
-  return values;
+export const getRandomData = (): number[] => {
+  // TODO: get this kind of data without d3fc
+  return randomGeometricBrownianMotion().steps(1e5)(1);
 };
 
 // export const getRandomData = (n: number) => {

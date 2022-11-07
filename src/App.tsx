@@ -108,16 +108,16 @@ const App = function App() {
       <div className="h-2/3 w-11/12">
         <div className="w-full h-full" ref={ref}>
           {height && width && (
-            <LinearViewD3 height={height} width={width} />
-            // <LinearView
-            //   heightPixel={height}
-            //   widthPixel={width}
-            //   channels={channels}
-            //   events={events}
-            //   pointsPerChannel={pointsPerChannel}
-            //   linesPerChannel={linesPerChannel}
-            //   renderedPointCountRef={renderedPointCount}
-            // />
+            // <LinearViewD3 height={height} width={width} />
+            <LinearView
+              heightPixel={height}
+              widthPixel={width}
+              channels={channels}
+              events={events}
+              pointsPerChannel={pointsPerChannel}
+              linesPerChannel={linesPerChannel}
+              renderedPointCountRef={renderedPointCount}
+            />
           )}
         </div>
       </div>

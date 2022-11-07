@@ -10,7 +10,7 @@ import { zoom, scaleLinear, select } from "d3";
 import simplify from "simplify-js";
 const LINEAR_VIEW_ID = "linear-view-d3fc";
 
-const initialData: number[] = randomGeometricBrownianMotion().steps(1e7)(1);
+const initialData: number[] = randomGeometricBrownianMotion().steps(1e6)(1);
 
 interface Props {
   width: number;
@@ -84,11 +84,12 @@ export const LinearViewD3: React.FC<Props> = ({ width, height }) => {
 
   return (
     <div
-      id={LINEAR_VIEW_ID}
       style={{
         width,
         height,
       }}
-    />
+    >
+      <div id={LINEAR_VIEW_ID} className="w-full h-full" />
+    </div>
   );
 };

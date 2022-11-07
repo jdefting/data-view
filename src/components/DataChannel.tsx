@@ -3,10 +3,10 @@ import simplify from "simplify-js";
 import { Container, Graphics } from "@inlet/react-pixi";
 import * as PIXI from "pixi.js";
 import { getRandomData } from "../fake-data";
-import { chunk } from "lodash-es";
+import { chunk, max, min } from "lodash-es";
 
 const DEBUG_MODE = false;
-const BACKGROUND_COLOR = 0xaaaaaa;
+const BACKGROUND_COLOR = 0x111111;
 
 const colors = [
   0xaa4a44, 0xff7f50, 0x6495ed, 0x9fe2bf, 0xffbf00, 0xf25f5c, 0x50514f,
@@ -18,29 +18,37 @@ export interface MockEvent {
   values: number[];
 }
 
-const aggregateData = (
-  values: number[],
-  viewWidth: number,
-  channelHeight: number,
-  min: number,
-  max: number
-): number[] => {
-  const pointsPerPixel = Math.max(values.length / viewWidth, 1);
-  const dataChunks = chunk(values, pointsPerPixel);
-  return dataChunks.map((chunk) => {
-    const value = Math.max(...chunk);
-    const percent = value / max;
+interface Point {
+  x: number;
+  y: number;
+}
 
-    return (1 - percent) * channelHeight;
+const getRelativePoints = (
+  values: Point[],
+  channelHeight: number,
+  valueRange: [number, number],
+  viewBounds: [number, number]
+): Point[] => {
+  const [minVal, maxVal] = valueRange;
+  const [viewStart, viewEnd] = viewBounds;
+  const viewLength = viewEnd - viewStart;
+
+  // todo: make use of x... (it's the index across entire data)
+  return values.map(({ x, y }, i) => {
+    const yPercent = (y - minVal) / (maxVal - minVal);
+    return {
+      y: (1 - yPercent) * channelHeight,
+      x: viewStart + i * (viewLength / values.length),
+    };
   });
 };
 
 const getLineWidth = (
-  worldWidth: number,
+  screenWidth: number,
   worldViewBounds: [number, number]
 ) => {
-  const viewWidth = Math.round(worldViewBounds[1] - worldViewBounds[0]);
-  return 2 * (viewWidth / worldWidth);
+  const viewWidth = worldViewBounds[1] - worldViewBounds[0];
+  return 2 * (viewWidth / screenWidth);
 };
 
 interface Props {
@@ -58,7 +66,6 @@ interface Props {
 }
 
 export const DataChannel: React.FC<Props> = ({
-  dataCount,
   lineCount,
   height,
   worldWidth,
@@ -67,31 +74,65 @@ export const DataChannel: React.FC<Props> = ({
   y,
   onPointsRendered,
   worldBounds,
-  events,
 }) => {
   const highResTimeout = useRef<number>(0);
   const highResRef = useRef<PIXI.Graphics>(null);
   const lowResRef = useRef<PIXI.Graphics>(null);
+  const lastViewWidth = useRef("");
 
-  const dataLines = useMemo(() => {
+  const dataLines: {
+    pointsByView: { [percent: string]: Point[] };
+    color: number;
+    valueRange: [number, number];
+  }[] = useMemo(() => {
     const lines = [];
 
+    console.time("calculate-views");
     for (let i = 0; i < lineCount; i++) {
-      let data = getRandomData(dataCount);
-      if (events && events[i]) {
-        data = events[i].values;
-      }
+      const data = getRandomData();
+      const maxValue = max(data) || 0;
+      const minValue = min(data) || 0;
+
+      const percentiles = [0, 0.2, 0.4, 0.6, 0.8, 1];
+
+      const pointsByView: { [percent: string]: Point[] } = {};
+      percentiles.forEach((percentile) => {
+        const pointsPerPixel = Math.max(
+          (data.length / worldWidth) * percentile,
+          1
+        );
+
+        console.time("aggregate-points");
+        const aggregatePoints = chunk(data, pointsPerPixel)
+          .map((chunk) => max(chunk) || 0)
+          .map((value, index) => ({
+            x: index,
+            y: value,
+          }));
+        console.timeEnd("aggregate-points");
+
+        console.time("simplify-points");
+        pointsByView[percentile.toFixed(2)] = simplify(aggregatePoints, 0.001);
+        console.timeEnd("simplify-points");
+      });
 
       lines.push({
-        data,
+        pointsByView,
         color: colors[i % colors.length],
-        max: Math.max(...data),
-        min: Math.min(...data),
+        valueRange: [minValue, maxValue] as [number, number],
       });
     }
 
+    console.timeEnd("calculate-views");
+
     return lines;
-  }, [dataCount, lineCount, events]);
+  }, [lineCount, worldWidth]);
+
+  const getViewPercentile = (viewWidth: number): string => {
+    const percentile = 0.2; // 20%
+    const viewPercent = viewWidth / worldWidth;
+    return (Math.round(viewPercent / percentile) * percentile).toFixed(2);
+  };
 
   const drawLowResData = useCallback(
     (g: PIXI.Graphics) => {
@@ -99,36 +140,45 @@ export const DataChannel: React.FC<Props> = ({
       g.clear();
 
       // background
-      g.beginFill(DEBUG_MODE ? 0x888888 : BACKGROUND_COLOR);
+      g.beginFill(DEBUG_MODE ? 0x222222 : BACKGROUND_COLOR);
       g.drawRect(0, 0, worldWidth, height);
       g.endFill();
 
-      dataLines.forEach(({ data, color, min, max }) => {
+      dataLines.forEach(({ pointsByView, color, valueRange }) => {
         // data
-        const lowResData = aggregateData(
-          data,
-          worldWidth * 2,
+        // const lowResData = aggregateData(
+        //   data,
+        //   worldWidth * 2,
+        //   height,
+        //   max,
+        //   min
+        // );
+        // const points = lowResData.map((y, i) => ({
+        //   x: worldBounds[0] + i * (worldWidth / lowResData.length),
+        //   y,
+        // }));
+        // const simplePoints = simplify(points, 2);
+
+        const lowResData = pointsByView[getViewPercentile(worldWidth)];
+        const points = getRelativePoints(
+          lowResData,
           height,
-          min,
-          max
+          valueRange,
+          worldBounds
         );
-        const points = lowResData.map((y, i) => ({
-          x: worldBounds[0] + i * (worldWidth / lowResData.length),
-          y,
-        }));
-        const simplePoints = simplify(points, 5);
 
         g.lineStyle({
-          width: getLineWidth(worldWidth, worldViewBounds),
+          width: getLineWidth(screenWidth, worldViewBounds),
           color,
           join: PIXI.LINE_JOIN.BEVEL,
           native: true,
         });
-        g.moveTo(0, simplePoints[0].y);
-        simplePoints.forEach(({ x, y }) => {
+        g.moveTo(0, points[0].y);
+        points.forEach(({ x, y }) => {
           g.lineTo(x, y);
         });
       });
+      console.timeEnd("low-res-calc");
     },
     [worldWidth, height, dataLines]
   );
@@ -137,16 +187,22 @@ export const DataChannel: React.FC<Props> = ({
     (g: PIXI.Graphics) => {
       clearTimeout(highResTimeout.current);
 
+      let [viewStart, viewEnd] = worldViewBounds;
+      const originalViewLength = viewEnd - viewStart;
+      if (originalViewLength.toFixed(4) !== lastViewWidth.current) {
+        g.clear();
+        lastViewWidth.current = originalViewLength.toFixed(4);
+      }
+
       highResTimeout.current = setTimeout(() => {
-        let [viewStart, viewEnd] = worldViewBounds;
         const bufferPercent = DEBUG_MODE ? -0.1 : 0;
-        const originalViewLength = viewEnd - viewStart;
+
         const bufferAmount = bufferPercent * originalViewLength;
         viewStart = Math.max(viewStart - bufferAmount, worldBounds[0]);
         viewEnd = Math.min(viewEnd + bufferAmount, worldBounds[1]);
-        const bufferRatio = (viewEnd - viewStart) / originalViewLength;
+        // const bufferRatio = (viewEnd - viewStart) / originalViewLength;
         const viewLength = viewEnd - viewStart;
-        const viewLengthScreen = screenWidth * bufferRatio;
+        // const viewLengthScreen = screenWidth * bufferRatio;
 
         g.clear();
 
@@ -156,45 +212,39 @@ export const DataChannel: React.FC<Props> = ({
         g.endFill();
 
         let renderCount = 0;
-        dataLines.forEach(({ data, color, min, max }) => {
+        console.time("high-res-calc");
+        dataLines.forEach(({ pointsByView, color, valueRange }) => {
           // only draw data in view
           const startPercent = viewStart / worldWidth;
           const endPercent = viewEnd / worldWidth;
-          const startIndex = startPercent * data.length;
-          const endIndex = endPercent * data.length;
-          const dataInView = data.slice(startIndex, endIndex);
-          const highResData = aggregateData(
-            dataInView,
-            viewLengthScreen,
-            height,
-            min,
-            max
-          );
 
-          // data
+          const allData = pointsByView[getViewPercentile(viewLength)];
+          const startIndex = startPercent * allData.length;
+          const endIndex = endPercent * allData.length;
+          const highResData = allData.slice(startIndex, endIndex);
+
+          const points = getRelativePoints(highResData, height, valueRange, [
+            viewStart,
+            viewEnd,
+          ]);
+
+          // console.log("high res points", points);
+
           g.lineStyle({
-            width: getLineWidth(worldWidth, worldViewBounds),
+            width: getLineWidth(screenWidth, worldViewBounds),
             color: DEBUG_MODE ? color + 0xaaaaaa : color,
             join: PIXI.LINE_JOIN.BEVEL,
-            native: true,
+            // native: true,
           });
-          g.moveTo(viewStart, highResData[0]);
+          g.moveTo(viewStart, points[0].y);
 
-          const points = highResData.map((y, i) => ({
-            x: viewStart + i * (viewLength / highResData.length),
-            y,
-          }));
+          renderCount += points.length;
 
-          let simplePoints = simplify(points, 5);
-          if (simplePoints.length < 100) {
-            simplePoints = points;
-          }
-          renderCount += simplePoints.length;
-
-          simplePoints.forEach(({ x, y }) => {
+          points.forEach(({ x, y }) => {
             g.lineTo(x, y);
           });
         });
+        console.timeEnd("high-res-calc");
         onPointsRendered(renderCount);
       }, 100);
     },
@@ -217,7 +267,7 @@ export const DataChannel: React.FC<Props> = ({
 
   // const lastScaleChange = useRef<number>(0);
   //
-  // const lineWidth = getLineWidth(worldWidth, worldViewBounds);
+  // const lineWidth = getLineWidth(screenWidth, worldViewBounds);
   // useEffect(() => {
   //   if (!highResRef.current || !lowResRef.current) {
   //     return;

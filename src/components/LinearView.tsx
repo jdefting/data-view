@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from "react";
-import { Stage, Graphics, useTick } from "@inlet/react-pixi";
+import { Stage, Graphics } from "@inlet/react-pixi";
 import * as PIXI from "pixi.js";
 import { Viewport as PixiViewport } from "pixi-viewport";
 import { Viewport } from "./Viewport";
@@ -36,13 +36,14 @@ export const LinearView: React.FC<Props> = ({
   const worldLength = worldEnd - worldStart;
   const [viewBounds, setViewBounds] = useState<[number, number]>([0, 50]);
   const viewMidPoint = (viewBounds[1] - viewBounds[0]) / 2 + viewBounds[0];
+  const lastMovedUpdate = useRef(0);
 
   const drawCursor = useCallback(
     (g: PIXI.Graphics) => {
       g.clear();
       g.lineStyle({
         width: cursorWidth,
-        color: 0x000,
+        color: 0xffffff,
         join: PIXI.LINE_JOIN.BEVEL,
         native: true,
       });
@@ -57,8 +58,6 @@ export const LinearView: React.FC<Props> = ({
         return;
       }
 
-      console.log("scale", viewport.scale);
-
       // fixing cursor position broken until we fix viewport breaking on resize
       setCursorX((viewport.screenWidthInWorldPixels / widthPixel) * cursorX);
       setCursorWidth(viewport.screenWidthInWorldPixels / widthPixel);
@@ -66,8 +65,10 @@ export const LinearView: React.FC<Props> = ({
     [widthPixel]
   );
 
-  const onMoved = useCallback(({ viewport }) => {
+  const onMoved = useCallback((viewport) => {
     const { left, right } = viewport; // world pos
+    // console.log("onMoved - setViewBounds");
+
     setViewBounds([left, right]);
   }, []);
 
@@ -121,7 +122,12 @@ export const LinearView: React.FC<Props> = ({
         <Stage
           height={heightPixel}
           width={widthPixel}
-          options={{ backgroundColor: 0xcccccc }}
+          options={{
+            backgroundColor: 0xcccccc,
+            antialias: true,
+            resolution: window.devicePixelRatio || 1,
+            autoDensity: true,
+          }}
         >
           <Viewport
             screenWidth={widthPixel}
