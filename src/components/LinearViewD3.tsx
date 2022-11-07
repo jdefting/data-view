@@ -1,23 +1,16 @@
-import React, { useEffect, useState } from "react";
-import fc, {
+import React, { useState, useEffect, useMemo } from "react";
+import {
   extentLinear,
-  annotationSvgGridline,
-  seriesSvgCandlestick,
-  seriesSvgMulti,
   chartCartesian,
-  seriesWebglPoint,
-  extentTime,
-  randomFinancial,
-  seriesWebglMulti,
-  webglSeriesPoint,
   seriesWebglLine,
-  webglSeriesLine,
+  webglStrokeColor,
   randomGeometricBrownianMotion,
 } from "d3fc";
 import { zoom, scaleLinear, select } from "d3";
+import simplify from "simplify-js";
 const LINEAR_VIEW_ID = "linear-view-d3fc";
 
-const initialData = randomGeometricBrownianMotion().steps(1e4)(1);
+const initialData: number[] = randomGeometricBrownianMotion().steps(1e7)(1);
 
 interface Props {
   width: number;
@@ -25,15 +18,26 @@ interface Props {
 }
 
 export const LinearViewD3: React.FC<Props> = ({ width, height }) => {
-  const [data, setData] = useState(initialData);
+  const [rawData, setRawData] = useState(
+    initialData.map((value, i) => ({
+      x: i,
+      y: value,
+    }))
+  );
 
-  const extent = extentLinear();
+  const data = useMemo(() => {
+    return simplify(rawData, 0.001);
+  }, [rawData]);
 
-  React.useEffect(() => {
+  useEffect(() => {
+    const yExtent = extentLinear().accessors([(d) => d.y]);
+
+    console.log(`raw points: ${rawData.length}, simplified: ${data.length}`);
+
     const xScale = scaleLinear()
       .domain([0, data.length - 1])
       .range([0, width]);
-    const yScale = scaleLinear().domain(extent(data)).range([0, height]);
+    const yScale = scaleLinear().domain(yExtent(data)).range([0, height]);
     const xScaleOriginal = xScale.copy();
     const yScaleOriginal = yScale.copy();
 
@@ -44,18 +48,19 @@ export const LinearViewD3: React.FC<Props> = ({ width, height }) => {
     const series = seriesWebglLine()
       .xScale(xScale)
       .yScale(yScale)
-      .crossValue((_, i) => i)
-      .mainValue((d) => d)
+      .crossValue((d) => d.x)
+      .mainValue((d) => d.y)
+      .decorate((ctx) => {
+        webglStrokeColor([1, 0, 0, 1])(ctx);
+      })
       .defined(() => true)
       .equals((previousData, currentData) => {
         return previousData.length === currentData;
       });
-    // TODO: color red
 
     // create a d3fc-zoom that handles the mouse / touch interactions
     const zoomEvent = zoom().on("zoom", (e) => {
       xScale.domain(e.transform.rescaleX(xScaleOriginal).domain());
-      yScale.domain(e.transform.rescaleY(yScaleOriginal).domain());
       render();
     });
 
