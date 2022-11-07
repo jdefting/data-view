@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { useResizeDetector } from "react-resize-detector";
 import { parse } from "papaparse";
 import { MockEvent } from "./components/DataChannel";
+import { LinearViewD3 } from "./components/LinearViewD3";
 
 const App = function App() {
   const [channelCount, setChannelCount] = useState(1);
@@ -107,15 +108,16 @@ const App = function App() {
       <div className="h-2/3 w-11/12">
         <div className="w-full h-full" ref={ref}>
           {height && width && (
-            <LinearView
-              heightPixel={height}
-              widthPixel={width}
-              channels={channels}
-              events={events}
-              pointsPerChannel={pointsPerChannel}
-              linesPerChannel={linesPerChannel}
-              renderedPointCountRef={renderedPointCount}
-            />
+            <LinearViewD3 height={height} width={width} />
+            // <LinearView
+            //   heightPixel={height}
+            //   widthPixel={width}
+            //   channels={channels}
+            //   events={events}
+            //   pointsPerChannel={pointsPerChannel}
+            //   linesPerChannel={linesPerChannel}
+            //   renderedPointCountRef={renderedPointCount}
+            // />
           )}
         </div>
       </div>
