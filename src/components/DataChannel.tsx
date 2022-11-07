@@ -145,20 +145,6 @@ export const DataChannel: React.FC<Props> = ({
       g.endFill();
 
       dataLines.forEach(({ pointsByView, color, valueRange }) => {
-        // data
-        // const lowResData = aggregateData(
-        //   data,
-        //   worldWidth * 2,
-        //   height,
-        //   max,
-        //   min
-        // );
-        // const points = lowResData.map((y, i) => ({
-        //   x: worldBounds[0] + i * (worldWidth / lowResData.length),
-        //   y,
-        // }));
-        // const simplePoints = simplify(points, 2);
-
         const lowResData = pointsByView[getViewPercentile(worldWidth)];
         const points = getRelativePoints(
           lowResData,
@@ -189,10 +175,10 @@ export const DataChannel: React.FC<Props> = ({
 
       let [viewStart, viewEnd] = worldViewBounds;
       const originalViewLength = viewEnd - viewStart;
-      if (originalViewLength.toFixed(4) !== lastViewWidth.current) {
-        g.clear();
-        lastViewWidth.current = originalViewLength.toFixed(4);
-      }
+      // if (originalViewLength.toFixed(4) !== lastViewWidth.current) {
+      //   g.clear();
+      //   lastViewWidth.current = originalViewLength.toFixed(4);
+      // }
 
       highResTimeout.current = setTimeout(() => {
         const bufferPercent = DEBUG_MODE ? -0.1 : 0;
@@ -200,9 +186,7 @@ export const DataChannel: React.FC<Props> = ({
         const bufferAmount = bufferPercent * originalViewLength;
         viewStart = Math.max(viewStart - bufferAmount, worldBounds[0]);
         viewEnd = Math.min(viewEnd + bufferAmount, worldBounds[1]);
-        // const bufferRatio = (viewEnd - viewStart) / originalViewLength;
         const viewLength = viewEnd - viewStart;
-        // const viewLengthScreen = screenWidth * bufferRatio;
 
         g.clear();
 
@@ -234,7 +218,7 @@ export const DataChannel: React.FC<Props> = ({
             width: getLineWidth(screenWidth, worldViewBounds),
             color: DEBUG_MODE ? color + 0xaaaaaa : color,
             join: PIXI.LINE_JOIN.BEVEL,
-            // native: true,
+            native: true,
           });
           g.moveTo(viewStart, points[0].y);
 
@@ -264,33 +248,6 @@ export const DataChannel: React.FC<Props> = ({
     },
     [worldWidth, height]
   );
-
-  // const lastScaleChange = useRef<number>(0);
-  //
-  // const lineWidth = getLineWidth(screenWidth, worldViewBounds);
-  // useEffect(() => {
-  //   if (!highResRef.current || !lowResRef.current) {
-  //     return;
-  //   }
-  //   console.log("lineWidth:", lineWidth);
-  //   const now = performance.now();
-  //
-  //   if (now - lastScaleChange.current < 500) {
-  //     return;
-  //   }
-  //
-  //   lastScaleChange.current = now;
-  //
-  //   highResRef.current.geometry.graphicsData.forEach((graphic) => {
-  //     graphic.lineStyle.width = lineWidth;
-  //   });
-  //   highResRef.current.geometry.invalidate();
-  //
-  //   lowResRef.current.geometry.graphicsData.forEach((graphic) => {
-  //     graphic.lineStyle.width = lineWidth;
-  //   });
-  //   lowResRef.current.geometry.invalidate();
-  // }, [lineWidth]);
 
   return (
     <Container y={y}>
