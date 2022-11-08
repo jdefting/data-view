@@ -1,9 +1,10 @@
 import React, { useCallback, useMemo, useRef } from "react";
-import simplify from "simplify-js";
 import { Container, Graphics } from "@inlet/react-pixi";
 import * as PIXI from "pixi.js";
 import { getRandomData } from "../fake-data";
 import { max, min } from "lodash-es";
+import { simplifyValues } from "./SimplifyWorker";
+import SimplifyWorker from "./SimplifyWorker/simplify-worker?worker";
 
 const DEBUG_MODE = false;
 const BACKGROUND_COLOR = 0x111111;
@@ -12,39 +13,6 @@ const colors = [
   0xaa4a44, 0xff7f50, 0x6495ed, 0x9fe2bf, 0xffbf00, 0xf25f5c, 0x50514f,
   0x70c1b3,
 ];
-
-interface Point {
-  x: number;
-  y: number;
-}
-
-const getRelativePoints = (
-  values: number[],
-  // screen pixels
-  channelHeight: number,
-  valueRange: [number, number],
-  // world units
-  viewBounds: [number, number]
-): Point[] => {
-  const [minVal, maxVal] = valueRange;
-  const [viewStart, viewEnd] = viewBounds;
-  const viewLength = viewEnd - viewStart;
-
-  const rawPoints = values.map((value, i) => {
-    const yPercent = (value - minVal) / (maxVal - minVal);
-    return {
-      y: (1 - yPercent) * channelHeight,
-      x: viewStart + i * (viewLength / values.length),
-    };
-  });
-
-  // simplification should be relative to channelHeight and viewLength
-  const simplificationAmount = 13; // (higher -> less simplification)
-  const relativeTolerance =
-    channelHeight * viewLength * simplificationAmount ** -5;
-
-  return simplify(rawPoints, relativeTolerance);
-};
 
 const getLineWidth = (
   screenWidth: number,
@@ -90,7 +58,12 @@ export const DataChannel: React.FC<Props> = ({
   const highResTimeout = useRef<NodeJS.Timeout>();
   const highResRef = useRef<PIXI.Graphics>(null);
   const lowResRef = useRef<PIXI.Graphics>(null);
-  const lastViewWidth = useRef("");
+  const worker = useMemo(() => {
+    // all work promise code could be encapsulated in a `useMemo`
+    // also look into https://github.com/GoogleChromeLabs/comlink
+    // to simplify web worker usage
+    return new SimplifyWorker();
+  }, []);
 
   const dataLines: {
     valuesByView: DataViews;
@@ -164,6 +137,8 @@ export const DataChannel: React.FC<Props> = ({
   const drawLowResData = useCallback(
     (g: PIXI.Graphics) => {
       // draw data across the entire world
+      console.log("rendering low res data");
+
       g.clear();
 
       // background
@@ -171,27 +146,31 @@ export const DataChannel: React.FC<Props> = ({
       g.drawRect(0, 0, worldWidth, height);
       g.endFill();
 
-      dataLines.forEach(({ valuesByView, color, valueRange }) => {
-        const lowResData = valuesByView[getViewPercentile(worldWidth)];
-        const points = getRelativePoints(
-          lowResData,
-          height,
-          valueRange,
-          worldBounds
-        );
-
-        g.lineStyle({
-          width: getLineWidth(screenWidth, worldViewBounds),
-          color,
-          join: PIXI.LINE_JOIN.BEVEL,
-          native: true,
-        });
-        g.moveTo(0, points[0].y);
-        points.forEach(({ x, y }) => {
-          g.lineTo(x, y);
+      simplifyValues(
+        worker,
+        dataLines.map(({ valuesByView, valueRange }) => {
+          const lowResData = valuesByView[getViewPercentile(worldWidth)];
+          return {
+            values: lowResData,
+            channelHeight: height,
+            valueRange,
+            viewBounds: worldBounds,
+          };
+        })
+      ).then((simplifiedDataLines) => {
+        simplifiedDataLines.forEach((points, i) => {
+          g.lineStyle({
+            width: getLineWidth(screenWidth, worldViewBounds),
+            color: dataLines[i].color,
+            join: PIXI.LINE_JOIN.BEVEL,
+            native: true,
+          });
+          g.moveTo(0, points[0].y);
+          points.forEach(({ x, y }) => {
+            g.lineTo(x, y);
+          });
         });
       });
-      console.timeEnd("low-res-calc");
     },
     [worldWidth, height, dataLines]
   );
@@ -199,13 +178,10 @@ export const DataChannel: React.FC<Props> = ({
   const drawHighResData = useCallback(
     (g: PIXI.Graphics) => {
       clearTimeout(highResTimeout.current);
+      // TODO: cancel web worker request!
 
       let [viewStart, viewEnd] = worldViewBounds;
       const originalViewLength = viewEnd - viewStart;
-      // if (originalViewLength.toFixed(4) !== lastViewWidth.current) {
-      //   g.clear();
-      //   lastViewWidth.current = originalViewLength.toFixed(4);
-      // }
 
       highResTimeout.current = setTimeout(() => {
         const bufferPercent = DEBUG_MODE ? -0.1 : 0.2;
@@ -215,47 +191,53 @@ export const DataChannel: React.FC<Props> = ({
         viewEnd = Math.min(viewEnd + bufferAmount, worldBounds[1]);
         const viewLength = viewEnd - viewStart;
 
-        g.clear();
-
-        // background
-        g.beginFill(BACKGROUND_COLOR);
-        g.drawRect(viewStart, 0, viewLength, height);
-        g.endFill();
-
         let renderCount = 0;
-        console.time("high-res-calc");
-        dataLines.forEach(({ valuesByView, color, valueRange }) => {
-          // only draw data in view
-          const startPercent = viewStart / worldWidth;
-          const endPercent = viewEnd / worldWidth;
+        simplifyValues(
+          worker,
+          dataLines.map(({ valuesByView, valueRange }) => {
+            // only draw data in view
+            const startPercent = viewStart / worldWidth;
+            const endPercent = viewEnd / worldWidth;
 
-          const allData = valuesByView[getViewPercentile(viewLength)];
-          const startIndex = startPercent * allData.length;
-          const endIndex = endPercent * allData.length;
-          const highResData = allData.slice(startIndex, endIndex);
+            const allData = valuesByView[getViewPercentile(viewLength)];
+            const startIndex = startPercent * allData.length;
+            const endIndex = endPercent * allData.length;
+            const highResData = allData.slice(startIndex, endIndex);
 
-          const points = getRelativePoints(highResData, height, valueRange, [
-            viewStart,
-            viewEnd,
-          ]);
+            return {
+              values: highResData,
+              channelHeight: height,
+              valueRange,
+              viewBounds: [viewStart, viewEnd],
+            };
+          })
+        ).then((simplifiedDataLines) => {
+          g.clear();
 
-          renderCount += points.length;
+          // background
+          g.beginFill(BACKGROUND_COLOR);
+          g.drawRect(viewStart, 0, viewLength, height);
+          g.endFill();
 
-          g.lineStyle({
-            width: getLineWidth(screenWidth, worldViewBounds),
-            color: DEBUG_MODE ? color + 0xaaaaaa : color,
-            join: PIXI.LINE_JOIN.BEVEL,
-            native: true,
+          simplifiedDataLines.forEach((points, i) => {
+            renderCount += points.length;
+            const dataColor = dataLines[i].color;
+
+            g.lineStyle({
+              width: getLineWidth(screenWidth, worldViewBounds),
+              color: DEBUG_MODE ? dataColor + 0xaaaaaa : dataColor,
+              join: PIXI.LINE_JOIN.BEVEL,
+              native: true,
+            });
+            g.moveTo(viewStart, points[0].y);
+            points.forEach(({ x, y }) => {
+              g.lineTo(x, y);
+            });
           });
-          g.moveTo(viewStart, points[0].y);
 
-          points.forEach(({ x, y }) => {
-            g.lineTo(x, y);
-          });
+          onPointsRendered(renderCount);
         });
-        console.timeEnd("high-res-calc");
-        onPointsRendered(renderCount);
-      }, 50);
+      }, 500);
     },
     [dataLines, screenWidth, worldWidth, height, worldViewBounds]
   );
