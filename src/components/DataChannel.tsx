@@ -3,7 +3,7 @@ import simplify from "simplify-js";
 import { Container, Graphics } from "@inlet/react-pixi";
 import * as PIXI from "pixi.js";
 import { getRandomData } from "../fake-data";
-import { chunk, max, min } from "lodash-es";
+import { max, min } from "lodash-es";
 
 const DEBUG_MODE = false;
 const BACKGROUND_COLOR = 0x111111;
@@ -54,6 +54,16 @@ const getLineWidth = (
   return 2 * (viewWidth / screenWidth);
 };
 
+type DataViews = { [percent: string]: number[] };
+
+interface DataLine {
+  valuesByView: DataViews;
+  color: number;
+  valueRange: [number, number];
+}
+
+const dataLineCaches: DataLine[] = [];
+
 interface Props {
   dataCount: number;
   lineCount: number;
@@ -83,14 +93,19 @@ export const DataChannel: React.FC<Props> = ({
   const lastViewWidth = useRef("");
 
   const dataLines: {
-    valuesByView: { [percent: string]: number[] };
+    valuesByView: DataViews;
     color: number;
     valueRange: [number, number];
   }[] = useMemo(() => {
     const lines = [];
 
-    console.time("calculate-views");
+    console.time(`calculate-views (${lineCount})`);
     for (let i = 0; i < lineCount; i++) {
+      if (dataLineCaches[i]) {
+        lines.push(dataLineCaches[i]);
+        continue;
+      }
+
       const data = getRandomData();
       const maxValue = max(data) || 0;
       const minValue = min(data) || 0;
@@ -104,19 +119,38 @@ export const DataChannel: React.FC<Props> = ({
           1
         );
 
-        valuesByView[percentile.toFixed(2)] = chunk(data, pointsPerPixel).map(
-          (val) => max(val) || 0
+        // unfortunately, this by hand method is much faster than using lodash chunk()
+        let curMax = 0;
+        let lastSlice = 0;
+        valuesByView[percentile.toFixed(2)] = data.reduce(
+          (aggregates, value, index) => {
+            curMax = Math.max(value, curMax);
+
+            if (
+              index - lastSlice >= pointsPerPixel ||
+              index === data.length - 1
+            ) {
+              aggregates.push(curMax);
+              lastSlice = index;
+              curMax = 0;
+            }
+            return aggregates;
+          },
+          [] as number[]
         );
       });
 
-      lines.push({
+      const dataLine = {
         valuesByView,
         color: colors[i % colors.length],
         valueRange: [minValue, maxValue] as [number, number],
-      });
+      };
+
+      dataLineCaches[i] = dataLine;
+      lines.push(dataLine);
     }
 
-    console.timeEnd("calculate-views");
+    console.timeEnd(`calculate-views (${lineCount})`);
 
     return lines;
   }, [lineCount, worldWidth]);
@@ -174,7 +208,7 @@ export const DataChannel: React.FC<Props> = ({
       // }
 
       highResTimeout.current = setTimeout(() => {
-        const bufferPercent = DEBUG_MODE ? -0.1 : 0;
+        const bufferPercent = DEBUG_MODE ? -0.1 : 0.2;
 
         const bufferAmount = bufferPercent * originalViewLength;
         viewStart = Math.max(viewStart - bufferAmount, worldBounds[0]);
