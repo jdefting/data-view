@@ -3,7 +3,7 @@ import { Stage, Graphics } from "@inlet/react-pixi";
 import * as PIXI from "pixi.js";
 import { Viewport as PixiViewport } from "pixi-viewport";
 import { Viewport } from "./Viewport";
-import { DataChannel, MockEvent } from "./DataChannel";
+import { DataChannel } from "./DataChannel";
 
 interface Props {
   channels: number[];
@@ -12,7 +12,6 @@ interface Props {
   renderedPointCountRef: React.MutableRefObject<number>;
   heightPixel: number;
   widthPixel: number;
-  events?: MockEvent[];
 }
 
 export const LinearView: React.FC<Props> = ({
@@ -22,7 +21,6 @@ export const LinearView: React.FC<Props> = ({
   renderedPointCountRef,
   heightPixel,
   widthPixel,
-  events,
 }) => {
   const viewportRef = useRef<PixiViewport>(null);
 
@@ -157,7 +155,6 @@ export const LinearView: React.FC<Props> = ({
                     renderedPointCountRef.current += count;
                   }}
                   worldBounds={worldBounds}
-                  events={events}
                 />
               );
             })}

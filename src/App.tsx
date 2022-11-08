@@ -2,15 +2,11 @@ import "./App.css";
 import { LinearView } from "./components/LinearView";
 import { useMemo, useRef, useState } from "react";
 import { useResizeDetector } from "react-resize-detector";
-import { parse } from "papaparse";
-import { MockEvent } from "./components/DataChannel";
-import { LinearViewD3 } from "./components/LinearViewD3";
 
 const App = function App() {
   const [channelCount, setChannelCount] = useState(1);
   const [linesPerChannel, setLinesPerChannel] = useState(1);
   const [pointsRendered, setPointsRendered] = useState(0);
-  const [events, setMockEvents] = useState<MockEvent[]>([]);
 
   const { width, height, ref } = useResizeDetector({
     refreshMode: "debounce",
@@ -43,37 +39,6 @@ const App = function App() {
       }}
     >
       <div className="flex gap-3 flex-col  border border-gray-600 p-2 ">
-        <input
-          type="file"
-          multiple
-          onChange={(e) => {
-            const files = e.currentTarget.files;
-            if (!files) {
-              return;
-            }
-
-            [...files].forEach((file) => {
-              parse(file, {
-                complete: ({ data }: { data: string[][] }, { name }) => {
-                  const dataHeaderIndex = 5;
-                  const values = data
-                    .slice(1)
-                    .map((row) => {
-                      return parseFloat(row[dataHeaderIndex]);
-                    })
-                    .filter((value) => !isNaN(value));
-
-                  setMockEvents((prevMockEvents) => {
-                    return [
-                      ...prevMockEvents,
-                      { name: name.split(".")[0], values },
-                    ];
-                  });
-                },
-              });
-            });
-          }}
-        />
         <div>
           Channels:{" "}
           <input
@@ -113,7 +78,6 @@ const App = function App() {
               heightPixel={height}
               widthPixel={width}
               channels={channels}
-              events={events}
               pointsPerChannel={pointsPerChannel}
               linesPerChannel={linesPerChannel}
               renderedPointCountRef={renderedPointCount}

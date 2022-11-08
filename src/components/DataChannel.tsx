@@ -13,11 +13,6 @@ const colors = [
   0x70c1b3,
 ];
 
-export interface MockEvent {
-  name: string;
-  values: number[];
-}
-
 interface Point {
   x: number;
   y: number;
@@ -62,7 +57,6 @@ interface Props {
   y: number;
   onPointsRendered: (count: number) => void;
   worldBounds: [number, number];
-  events?: MockEvent[];
 }
 
 export const DataChannel: React.FC<Props> = ({
@@ -75,7 +69,7 @@ export const DataChannel: React.FC<Props> = ({
   onPointsRendered,
   worldBounds,
 }) => {
-  const highResTimeout = useRef<number>(0);
+  const highResTimeout = useRef<NodeJS.Timeout>();
   const highResRef = useRef<PIXI.Graphics>(null);
   const lowResRef = useRef<PIXI.Graphics>(null);
   const lastViewWidth = useRef("");
