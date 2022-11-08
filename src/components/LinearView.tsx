@@ -34,7 +34,6 @@ export const LinearView: React.FC<Props> = ({
   const worldLength = worldEnd - worldStart;
   const [viewBounds, setViewBounds] = useState<[number, number]>([0, 50]);
   const viewMidPoint = (viewBounds[1] - viewBounds[0]) / 2 + viewBounds[0];
-  const lastMovedUpdate = useRef(0);
 
   const drawCursor = useCallback(
     (g: PIXI.Graphics) => {
@@ -56,8 +55,7 @@ export const LinearView: React.FC<Props> = ({
         return;
       }
 
-      // fixing cursor position broken until we fix viewport breaking on resize
-      setCursorX((viewport.screenWidthInWorldPixels / widthPixel) * cursorX);
+      // todo: fix cursor position when zooming back out and hitting view bound
       setCursorWidth(viewport.screenWidthInWorldPixels / widthPixel);
     },
     [widthPixel]
