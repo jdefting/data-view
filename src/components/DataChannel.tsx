@@ -24,7 +24,8 @@ const getRelativePoints = (
   channelHeight: number,
   valueRange: [number, number],
   // world units
-  viewBounds: [number, number]
+  viewBounds: [number, number],
+  shouldSimplify = true
 ): Point[] => {
   const [minVal, maxVal] = valueRange;
   const [viewStart, viewEnd] = viewBounds;
@@ -43,7 +44,7 @@ const getRelativePoints = (
   const relativeTolerance =
     channelHeight * viewLength * simplificationAmount ** -5;
 
-  return simplify(rawPoints, relativeTolerance);
+  return shouldSimplify ? simplify(rawPoints, relativeTolerance) : rawPoints;
 };
 
 const getLineWidth = (
@@ -177,7 +178,8 @@ export const DataChannel: React.FC<Props> = ({
           lowResData,
           height,
           valueRange,
-          worldBounds
+          worldBounds,
+          false
         );
 
         g.lineStyle({
@@ -223,7 +225,6 @@ export const DataChannel: React.FC<Props> = ({
         g.endFill();
 
         let renderCount = 0;
-        console.time("high-res-calc");
         dataLines.forEach(({ valuesByView, color, valueRange }) => {
           // only draw data in view
           const startPercent = viewStart / worldWidth;
@@ -253,9 +254,8 @@ export const DataChannel: React.FC<Props> = ({
             g.lineTo(x, y);
           });
         });
-        console.timeEnd("high-res-calc");
         onPointsRendered(renderCount);
-      }, 50);
+      }, 100);
     },
     [dataLines, screenWidth, worldWidth, height, worldViewBounds]
   );
