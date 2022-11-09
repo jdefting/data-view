@@ -3,7 +3,7 @@ import simplify from "simplify-js";
 import { Container, Graphics } from "@inlet/react-pixi";
 import * as PIXI from "pixi.js";
 import { getRandomData } from "../fake-data";
-import { max, min, chunk } from "lodash-es";
+import { max, min, chunk, mean } from "lodash-es";
 
 const colors = [
   0xaa4a44, 0xff7f50, 0x6495ed, 0x9fe2bf, 0xffbf00, 0xf25f5c, 0x50514f,
@@ -21,19 +21,27 @@ const getRelativePoints = (
   channelHeight: number,
   valueRange: [number, number],
   // world units
-  viewBounds: [number, number]
+  viewBounds: [number, number],
+  visualViewBounds?: [number, number]
 ): Point[] => {
   const [minVal, maxVal] = valueRange;
   const [viewStart, viewEnd] = viewBounds;
   const viewLength = viewEnd - viewStart;
 
-  const rawPoints = values.map((value, i) => {
-    const yPercent = (value - minVal) / (maxVal - minVal);
-    return {
-      y: (1 - yPercent) * channelHeight,
-      x: viewStart + i * (viewLength / (values.length - 1)),
-    };
-  });
+  const rawPoints = values
+    .map((value, i) => {
+      const yPercent = (value - minVal) / (maxVal - minVal);
+      return {
+        y: (1 - yPercent) * channelHeight,
+        x: viewStart + i * (viewLength / (values.length - 1)),
+      };
+    })
+    .filter(({ x }) => {
+      if (!visualViewBounds) {
+        return true;
+      }
+      return visualViewBounds[0] <= x && x <= visualViewBounds[1];
+    });
 
   // simplification should be relative to channelHeight and viewLength
   const simplificationAmount = 13; // (higher -> less simplification)
@@ -43,8 +51,6 @@ const getRelativePoints = (
   // return simplify(rawPoints, relativeTolerance);
   return rawPoints;
 };
-
-type DataViews = { [percent: string]: number[] };
 
 interface DataLine {
   rawData: number[];
@@ -136,7 +142,7 @@ export const DataChannel: React.FC<Props> = ({
       g.clear();
 
       // background
-      g.beginFill(backgroundColor);
+      g.beginFill(backgroundColor, debugMode ? 0.5 : 1);
       g.drawRect(viewStart, 0, viewLength, height);
       g.endFill();
 
@@ -152,8 +158,14 @@ export const DataChannel: React.FC<Props> = ({
 
         // TODO: adjust startPercent, endPercent by hard aggregate indexes (should this be done before we draw the background?)
         const [viewStart2, viewEnd2] = [
-          Math.floor(viewBounds[0] / indexesPerPoint) * indexesPerPoint,
-          Math.ceil(viewBounds[1] / indexesPerPoint) * indexesPerPoint,
+          Math.max(
+            Math.floor(viewBounds[0] / indexesPerPoint) * indexesPerPoint,
+            worldBounds[0]
+          ),
+          Math.min(
+            Math.ceil(viewBounds[1] / indexesPerPoint) * indexesPerPoint,
+            worldBounds[1]
+          ),
         ];
 
         const startPercent2 = viewStart2 / worldWidth;
@@ -162,20 +174,26 @@ export const DataChannel: React.FC<Props> = ({
         const endIndex2 = endPercent2 * rawData.length;
 
         const rawDataInView = rawData.slice(startIndex2, endIndex2);
-        // TODO: keep aggregation steady
         const data: number[] = chunk(rawDataInView, indexesPerPoint).map(
           (values) => {
             return max(values) || 0;
           }
         );
 
+        // question: can we filter the added points before sending them to `getRelativePoints`?
+        // maybe if we KNEW the bounds being added (calculate instead of floor/ceil)
+        //  x: viewStart + i * (viewLength / (values.length - 1)),
+        //  inVisual = visualViewBounds[0] <= x && x <= visualViewBounds[1];
+
         // console.log("data length (before simplify)", data.length);
 
-        // these viewBounds will be slightly wider than original view bounds once I stabilize aggregates
-        const points = getRelativePoints(data, height, valueRange, [
-          viewStart2,
-          viewEnd2,
-        ]);
+        const points = getRelativePoints(
+          data,
+          height,
+          valueRange,
+          [viewStart2, viewEnd2],
+          viewBounds
+        );
 
         renderCount += points.length;
 
@@ -195,7 +213,7 @@ export const DataChannel: React.FC<Props> = ({
 
       return renderCount;
     },
-    [height, screenWidth, worldWidth]
+    [debugMode, height, screenWidth, worldWidth]
   );
 
   const drawLowResData = useCallback(
@@ -218,7 +236,7 @@ export const DataChannel: React.FC<Props> = ({
       const originalViewLength = viewEnd - viewStart;
 
       highResTimeout.current = setTimeout(() => {
-        const bufferPercent = debugMode ? -0.1 : 0;
+        const bufferPercent = debugMode ? -0.1 : 0.2;
 
         const bufferAmount = bufferPercent * originalViewLength;
         viewStart = Math.max(viewStart - bufferAmount, worldBounds[0]);
@@ -231,7 +249,7 @@ export const DataChannel: React.FC<Props> = ({
           colorAdjust: debugMode ? 0xaaaaaa : undefined,
         });
         onPointsRendered(renderCount);
-      }, 500);
+      }, 100);
     },
     [worldViewBounds, debugMode, worldBounds, buildGraphics, dataLines]
   );
