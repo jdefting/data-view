@@ -14,6 +14,8 @@ const App = function App() {
     refreshRate: 1,
   });
 
+  // const width = 100;
+
   const renderedPointCount = useRef(0);
   setInterval(() => {
     setPointsRendered(renderedPointCount.current);

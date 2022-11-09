@@ -31,6 +31,7 @@ export const LinearView: React.FC<Props> = ({
   const [worldBounds, setWorldBounds] = useState<[number, number]>([
     0,
     widthPixel * 2,
+    // 1000,
   ]);
   const [worldStart, worldEnd] = worldBounds;
   const worldLength = worldEnd - worldStart;

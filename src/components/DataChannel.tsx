@@ -3,7 +3,7 @@ import simplify from "simplify-js";
 import { Container, Graphics } from "@inlet/react-pixi";
 import * as PIXI from "pixi.js";
 import { getRandomData } from "../fake-data";
-import { max, min } from "lodash-es";
+import { max, min, chunk } from "lodash-es";
 
 const colors = [
   0xaa4a44, 0xff7f50, 0x6495ed, 0x9fe2bf, 0xffbf00, 0xf25f5c, 0x50514f,
@@ -31,7 +31,7 @@ const getRelativePoints = (
     const yPercent = (value - minVal) / (maxVal - minVal);
     return {
       y: (1 - yPercent) * channelHeight,
-      x: viewStart + i * (viewLength / values.length),
+      x: viewStart + i * (viewLength / (values.length - 1)),
     };
   });
 
@@ -40,13 +40,14 @@ const getRelativePoints = (
   const relativeTolerance =
     channelHeight * viewLength * simplificationAmount ** -5;
 
-  return simplify(rawPoints, relativeTolerance);
+  // return simplify(rawPoints, relativeTolerance);
+  return rawPoints;
 };
 
 type DataViews = { [percent: string]: number[] };
 
 interface DataLine {
-  valuesByView: DataViews;
+  rawData: number[];
   color: number;
   valueRange: [number, number];
 }
@@ -59,14 +60,6 @@ interface DataLine {
 //   const viewWidth = worldViewBounds[1] - worldViewBounds[0];
 //   return 2 * (viewWidth / screenWidth);
 // };
-
-const getViewPercentile = (viewWidth: number, worldWidth: number): string => {
-  const percentile = 0.2; // 20%
-  const viewPercent = viewWidth / worldWidth;
-  return (Math.round(viewPercent / percentile) * percentile).toFixed(2);
-};
-
-const dataLineCaches: DataLine[] = [];
 
 interface Props {
   dataCount: number;
@@ -91,71 +84,34 @@ export const DataChannel: React.FC<Props> = ({
   onPointsRendered,
   worldBounds,
   debugMode,
+  screenWidth,
 }) => {
   const highResTimeout = useRef<NodeJS.Timeout>();
+  const rawDataCache = useRef<number[][]>([]);
 
-  const dataLines: {
-    valuesByView: DataViews;
-    color: number;
-    valueRange: [number, number];
-  }[] = useMemo(() => {
+  const dataLines: DataLine[] = useMemo(() => {
     const lines = [];
 
     console.time(`calculate-views (${lineCount})`);
     for (let i = 0; i < lineCount; i++) {
-      if (dataLineCaches[i]) {
-        lines.push(dataLineCaches[i]);
-        continue;
-      }
-
-      const data = getRandomData();
-      const maxValue = max(data) || 0;
-      const minValue = min(data) || 0;
-
-      const percentiles = [0, 0.2, 0.4, 0.6, 0.8, 1];
-
-      const valuesByView: { [percent: string]: number[] } = {};
-      percentiles.forEach((percentile) => {
-        const pointsPerPixel = Math.max(
-          (data.length / worldWidth) * percentile,
-          1
-        );
-
-        // unfortunately, this by hand method is much faster than using lodash chunk()
-        let curMax = 0;
-        let lastSlice = 0;
-        valuesByView[percentile.toFixed(2)] = data.reduce(
-          (aggregates, value, index) => {
-            curMax = Math.max(value, curMax);
-
-            if (
-              index - lastSlice >= pointsPerPixel ||
-              index === data.length - 1
-            ) {
-              aggregates.push(curMax);
-              lastSlice = index;
-              curMax = 0;
-            }
-            return aggregates;
-          },
-          [] as number[]
-        );
-      });
+      const rawData = rawDataCache.current[i] || getRandomData();
+      rawDataCache.current[i] = rawData;
+      const maxValue = max(rawData) || 0;
+      const minValue = min(rawData) || 0;
 
       const dataLine = {
-        valuesByView,
+        rawData,
         color: colors[i % colors.length],
         valueRange: [minValue, maxValue] as [number, number],
       };
 
-      dataLineCaches[i] = dataLine;
       lines.push(dataLine);
     }
 
     console.timeEnd(`calculate-views (${lineCount})`);
 
     return lines;
-  }, [lineCount, worldWidth]);
+  }, [lineCount]);
 
   const buildGraphics = useCallback(
     ({
@@ -171,6 +127,7 @@ export const DataChannel: React.FC<Props> = ({
       colorAdjust?: number;
       backgroundColor?: number;
     }) => {
+      console.log("viewBounds", viewBounds);
       const [viewStart, viewEnd] = viewBounds;
       const viewLength = viewEnd - viewStart;
       const startPercent = viewStart / worldWidth;
@@ -184,15 +141,42 @@ export const DataChannel: React.FC<Props> = ({
       g.endFill();
 
       let renderCount = 0;
-      dataLines.forEach(({ valuesByView, color, valueRange }) => {
-        // TODO: chunk data here
-        const allData = valuesByView[getViewPercentile(viewLength, worldWidth)];
+      console.time("build-graphics");
+      dataLines.forEach(({ rawData, color, valueRange }) => {
+        const startIndex = startPercent * rawData.length;
+        const endIndex = endPercent * rawData.length;
+        const indexesPerPoint = Math.max(
+          Math.ceil((endIndex - startIndex) / screenWidth),
+          1
+        );
 
-        const startIndex = startPercent * allData.length;
-        const endIndex = endPercent * allData.length;
-        const data = allData.slice(startIndex, endIndex);
+        // TODO: adjust startPercent, endPercent by hard aggregate indexes (should this be done before we draw the background?)
+        const [viewStart2, viewEnd2] = [
+          Math.floor(viewBounds[0] / indexesPerPoint) * indexesPerPoint,
+          Math.ceil(viewBounds[1] / indexesPerPoint) * indexesPerPoint,
+        ];
 
-        const points = getRelativePoints(data, height, valueRange, viewBounds);
+        const startPercent2 = viewStart2 / worldWidth;
+        const endPercent2 = viewEnd2 / worldWidth;
+        const startIndex2 = startPercent2 * rawData.length;
+        const endIndex2 = endPercent2 * rawData.length;
+
+        const rawDataInView = rawData.slice(startIndex2, endIndex2);
+        // TODO: keep aggregation steady
+        const data: number[] = chunk(rawDataInView, indexesPerPoint).map(
+          (values) => {
+            return max(values) || 0;
+          }
+        );
+
+        // console.log("data length (before simplify)", data.length);
+
+        // these viewBounds will be slightly wider than original view bounds once I stabilize aggregates
+        const points = getRelativePoints(data, height, valueRange, [
+          viewStart2,
+          viewEnd2,
+        ]);
+
         renderCount += points.length;
 
         g.lineStyle({
@@ -207,14 +191,15 @@ export const DataChannel: React.FC<Props> = ({
         });
       });
 
+      console.timeEnd("build-graphics");
+
       return renderCount;
     },
-    [height, worldWidth]
+    [height, screenWidth, worldWidth]
   );
 
   const drawLowResData = useCallback(
     (g: PIXI.Graphics) => {
-      console.log("building low res graphics");
       buildGraphics({
         g,
         dataLines,
@@ -233,8 +218,7 @@ export const DataChannel: React.FC<Props> = ({
       const originalViewLength = viewEnd - viewStart;
 
       highResTimeout.current = setTimeout(() => {
-        console.log("building high res graphics");
-        const bufferPercent = debugMode ? -0.1 : 0.2;
+        const bufferPercent = debugMode ? -0.1 : 0;
 
         const bufferAmount = bufferPercent * originalViewLength;
         viewStart = Math.max(viewStart - bufferAmount, worldBounds[0]);
@@ -247,7 +231,7 @@ export const DataChannel: React.FC<Props> = ({
           colorAdjust: debugMode ? 0xaaaaaa : undefined,
         });
         onPointsRendered(renderCount);
-      }, 100);
+      }, 500);
     },
     [worldViewBounds, debugMode, worldBounds, buildGraphics, dataLines]
   );
