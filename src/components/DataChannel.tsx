@@ -53,13 +53,14 @@ interface DataLine {
   valueRange: [number, number];
 }
 
-const getLineWidth = (
-  screenWidth: number,
-  worldViewBounds: [number, number]
-) => {
-  const viewWidth = worldViewBounds[1] - worldViewBounds[0];
-  return 2 * (viewWidth / screenWidth);
-};
+// used to get width relative to screen size, not necessary if we use native lines
+// const getLineWidth = (
+//   screenWidth: number,
+//   worldViewBounds: [number, number]
+// ) => {
+//   const viewWidth = worldViewBounds[1] - worldViewBounds[0];
+//   return 2 * (viewWidth / screenWidth);
+// };
 
 const getViewPercentile = (viewWidth: number, worldWidth: number): string => {
   const percentile = 0.2; // 20%
@@ -87,14 +88,11 @@ export const DataChannel: React.FC<Props> = ({
   height,
   worldWidth,
   worldViewBounds,
-  screenWidth,
   y,
   onPointsRendered,
   worldBounds,
 }) => {
   const highResTimeout = useRef<NodeJS.Timeout>();
-  const highResRef = useRef<PIXI.Graphics>(null);
-  const lowResRef = useRef<PIXI.Graphics>(null);
 
   const dataLines: {
     valuesByView: DataViews;
@@ -159,62 +157,64 @@ export const DataChannel: React.FC<Props> = ({
     return lines;
   }, [lineCount, worldWidth]);
 
-  const lineWidth = getLineWidth(screenWidth, worldViewBounds);
+  const buildGraphics = useCallback(
+    ({
+      g,
+      dataLines,
+      viewBounds,
+      colorAdjust = 0x000,
+      backgroundColor = 0x111111,
+    }: {
+      g: PIXI.Graphics;
+      dataLines: DataLine[];
+      viewBounds: [number, number];
+      colorAdjust?: number;
+      backgroundColor?: number;
+    }) => {
+      const [viewStart, viewEnd] = viewBounds;
+      const viewLength = viewEnd - viewStart;
+      const startPercent = viewStart / worldWidth;
+      const endPercent = viewEnd / worldWidth;
 
-  const buildGraphics = ({
-    g,
-    dataLines,
-    viewBounds,
-    colorAdjust = 0x000,
-    backgroundColor = 0x111111,
-  }: {
-    g: PIXI.Graphics;
-    dataLines: DataLine[];
-    viewBounds: [number, number];
-    colorAdjust?: number;
-    backgroundColor?: number;
-  }) => {
-    const [viewStart, viewEnd] = viewBounds;
-    const viewLength = viewEnd - viewStart;
-    const startPercent = viewStart / worldWidth;
-    const endPercent = viewEnd / worldWidth;
+      g.clear();
 
-    g.clear();
+      // background
+      g.beginFill(backgroundColor);
+      g.drawRect(viewStart, 0, viewLength, height);
+      g.endFill();
 
-    // background
-    g.beginFill(backgroundColor);
-    g.drawRect(viewStart, 0, viewLength, height);
-    g.endFill();
+      let renderCount = 0;
+      dataLines.forEach(({ valuesByView, color, valueRange }) => {
+        // TODO: chunk data here
+        const allData = valuesByView[getViewPercentile(viewLength, worldWidth)];
 
-    let renderCount = 0;
-    dataLines.forEach(({ valuesByView, color, valueRange }) => {
-      // TODO: chunk data here
-      const allData = valuesByView[getViewPercentile(viewLength, worldWidth)];
+        const startIndex = startPercent * allData.length;
+        const endIndex = endPercent * allData.length;
+        const data = allData.slice(startIndex, endIndex);
 
-      const startIndex = startPercent * allData.length;
-      const endIndex = endPercent * allData.length;
-      const data = allData.slice(startIndex, endIndex);
+        const points = getRelativePoints(data, height, valueRange, viewBounds);
+        renderCount += points.length;
 
-      const points = getRelativePoints(data, height, valueRange, viewBounds);
-      renderCount += points.length;
-
-      g.lineStyle({
-        width: lineWidth,
-        color: color + colorAdjust,
-        join: PIXI.LINE_JOIN.BEVEL,
-        native: true,
+        g.lineStyle({
+          width: 1,
+          color: color + colorAdjust,
+          join: PIXI.LINE_JOIN.BEVEL,
+          native: true,
+        });
+        g.moveTo(points[0].x, points[0].y);
+        points.forEach(({ x, y }) => {
+          g.lineTo(x, y);
+        });
       });
-      g.moveTo(points[0].x, points[0].y);
-      points.forEach(({ x, y }) => {
-        g.lineTo(x, y);
-      });
-    });
 
-    return renderCount;
-  };
+      return renderCount;
+    },
+    [height, worldWidth]
+  );
 
   const drawLowResData = useCallback(
     (g: PIXI.Graphics) => {
+      console.log("building low res graphics");
       buildGraphics({
         g,
         dataLines,
@@ -222,7 +222,7 @@ export const DataChannel: React.FC<Props> = ({
         backgroundColor: DEBUG_MODE ? 0x222222 : undefined,
       });
     },
-    [worldWidth, height, dataLines]
+    [buildGraphics, dataLines, worldBounds]
   );
 
   const drawHighResData = useCallback(
@@ -233,6 +233,7 @@ export const DataChannel: React.FC<Props> = ({
       const originalViewLength = viewEnd - viewStart;
 
       highResTimeout.current = setTimeout(() => {
+        console.log("building high res graphics");
         const bufferPercent = DEBUG_MODE ? -0.1 : 0.2;
 
         const bufferAmount = bufferPercent * originalViewLength;
@@ -248,7 +249,7 @@ export const DataChannel: React.FC<Props> = ({
         onPointsRendered(renderCount);
       }, 100);
     },
-    [dataLines, screenWidth, worldWidth, height, worldViewBounds]
+    [worldViewBounds, worldBounds, buildGraphics, dataLines]
   );
 
   const drawLine = useCallback(
@@ -262,23 +263,13 @@ export const DataChannel: React.FC<Props> = ({
       g.moveTo(0, 0);
       g.lineTo(worldWidth, 0);
     },
-    [worldWidth, height]
+    [worldWidth]
   );
 
   return (
     <Container y={y}>
-      <Graphics
-        x={0}
-        ref={lowResRef}
-        draw={drawLowResData}
-        interactiveChildren={false}
-      />
-      <Graphics
-        ref={highResRef}
-        x={0}
-        draw={drawHighResData}
-        interactiveChildren={false}
-      />
+      <Graphics x={0} draw={drawLowResData} interactiveChildren={false} />
+      <Graphics x={0} draw={drawHighResData} interactiveChildren={false} />
       <Graphics draw={drawLine} y={height + 1} />
     </Container>
   );
