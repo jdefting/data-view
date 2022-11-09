@@ -126,14 +126,15 @@ export const DataChannel: React.FC<Props> = ({
       viewBounds,
       colorAdjust = 0x000,
       backgroundColor = 0x111111,
+      xResolution = screenWidth,
     }: {
       g: PIXI.Graphics;
       dataLines: DataLine[];
       viewBounds: [number, number];
+      xResolution?: number;
       colorAdjust?: number;
       backgroundColor?: number;
     }) => {
-      console.log("viewBounds", viewBounds);
       const [viewStart, viewEnd] = viewBounds;
       const viewLength = viewEnd - viewStart;
       const startPercent = viewStart / worldWidth;
@@ -152,7 +153,7 @@ export const DataChannel: React.FC<Props> = ({
         const startIndex = startPercent * rawData.length;
         const endIndex = endPercent * rawData.length;
         const indexesPerPoint = Math.max(
-          Math.ceil((endIndex - startIndex) / screenWidth),
+          Math.ceil((endIndex - startIndex) / xResolution),
           1
         );
 
@@ -213,7 +214,7 @@ export const DataChannel: React.FC<Props> = ({
 
       return renderCount;
     },
-    [debugMode, height, screenWidth, worldWidth]
+    [debugMode, height, screenWidth, worldBounds, worldWidth]
   );
 
   const drawLowResData = useCallback(
@@ -223,6 +224,7 @@ export const DataChannel: React.FC<Props> = ({
         dataLines,
         viewBounds: worldBounds,
         backgroundColor: debugMode ? 0x222222 : undefined,
+        xResolution: screenWidth * 2,
       });
     },
     [buildGraphics, dataLines, debugMode, worldBounds]
