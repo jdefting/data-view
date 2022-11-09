@@ -7,6 +7,7 @@ const App = function App() {
   const [channelCount, setChannelCount] = useState(1);
   const [linesPerChannel, setLinesPerChannel] = useState(1);
   const [pointsRendered, setPointsRendered] = useState(0);
+  const [debugMode, setDebugMode] = useState(false);
 
   const { width, height, ref } = useResizeDetector({
     refreshMode: "debounce",
@@ -39,6 +40,14 @@ const App = function App() {
       }}
     >
       <div className="flex gap-3 flex-col  border border-gray-600 p-2 ">
+        <div>
+          Debug Mode:{" "}
+          <input
+            type="checkbox"
+            onChange={(e) => setDebugMode(e.currentTarget.checked)}
+            checked={debugMode}
+          />
+        </div>
         <div>
           Channels:{" "}
           <input
@@ -75,6 +84,7 @@ const App = function App() {
           {height && width && (
             // <LinearViewD3 height={height} width={width} />
             <LinearView
+              debugMode={debugMode}
               heightPixel={height}
               widthPixel={width}
               channels={channels}

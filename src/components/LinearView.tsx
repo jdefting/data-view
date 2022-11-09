@@ -12,6 +12,7 @@ interface Props {
   renderedPointCountRef: React.MutableRefObject<number>;
   heightPixel: number;
   widthPixel: number;
+  debugMode: boolean;
 }
 
 export const LinearView: React.FC<Props> = ({
@@ -21,6 +22,7 @@ export const LinearView: React.FC<Props> = ({
   renderedPointCountRef,
   heightPixel,
   widthPixel,
+  debugMode,
 }) => {
   const viewportRef = useRef<PixiViewport>(null);
 
@@ -153,6 +155,7 @@ export const LinearView: React.FC<Props> = ({
                     renderedPointCountRef.current += count;
                   }}
                   worldBounds={worldBounds}
+                  debugMode={debugMode}
                 />
               );
             })}

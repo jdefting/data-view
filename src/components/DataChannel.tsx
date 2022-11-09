@@ -5,8 +5,6 @@ import * as PIXI from "pixi.js";
 import { getRandomData } from "../fake-data";
 import { max, min } from "lodash-es";
 
-const DEBUG_MODE = true;
-
 const colors = [
   0xaa4a44, 0xff7f50, 0x6495ed, 0x9fe2bf, 0xffbf00, 0xf25f5c, 0x50514f,
   0x70c1b3,
@@ -81,6 +79,7 @@ interface Props {
   y: number;
   onPointsRendered: (count: number) => void;
   worldBounds: [number, number];
+  debugMode: boolean;
 }
 
 export const DataChannel: React.FC<Props> = ({
@@ -91,6 +90,7 @@ export const DataChannel: React.FC<Props> = ({
   y,
   onPointsRendered,
   worldBounds,
+  debugMode,
 }) => {
   const highResTimeout = useRef<NodeJS.Timeout>();
 
@@ -219,10 +219,10 @@ export const DataChannel: React.FC<Props> = ({
         g,
         dataLines,
         viewBounds: worldBounds,
-        backgroundColor: DEBUG_MODE ? 0x222222 : undefined,
+        backgroundColor: debugMode ? 0x222222 : undefined,
       });
     },
-    [buildGraphics, dataLines, worldBounds]
+    [buildGraphics, dataLines, debugMode, worldBounds]
   );
 
   const drawHighResData = useCallback(
@@ -234,7 +234,7 @@ export const DataChannel: React.FC<Props> = ({
 
       highResTimeout.current = setTimeout(() => {
         console.log("building high res graphics");
-        const bufferPercent = DEBUG_MODE ? -0.1 : 0.2;
+        const bufferPercent = debugMode ? -0.1 : 0.2;
 
         const bufferAmount = bufferPercent * originalViewLength;
         viewStart = Math.max(viewStart - bufferAmount, worldBounds[0]);
@@ -244,12 +244,12 @@ export const DataChannel: React.FC<Props> = ({
           g,
           dataLines,
           viewBounds: [viewStart, viewEnd],
-          colorAdjust: DEBUG_MODE ? 0xaaaaaa : undefined,
+          colorAdjust: debugMode ? 0xaaaaaa : undefined,
         });
         onPointsRendered(renderCount);
       }, 100);
     },
-    [worldViewBounds, worldBounds, buildGraphics, dataLines]
+    [worldViewBounds, debugMode, worldBounds, buildGraphics, dataLines]
   );
 
   const drawLine = useCallback(
