@@ -4,6 +4,7 @@ import { Container, Graphics } from "@inlet/react-pixi";
 import * as PIXI from "pixi.js";
 import { getRandomData } from "../fake-data";
 import { max, min, chunk, mean } from "lodash-es";
+import { ILineStyleOptions } from "@pixi/graphics";
 
 const colors = [
   0xaa4a44, 0xff7f50, 0x6495ed, 0x9fe2bf, 0xffbf00, 0xf25f5c, 0x50514f,
@@ -21,27 +22,19 @@ const getRelativePoints = (
   channelHeight: number,
   valueRange: [number, number],
   // world units
-  viewBounds: [number, number],
-  visualViewBounds?: [number, number]
+  viewBounds: [number, number]
 ): Point[] => {
   const [minVal, maxVal] = valueRange;
   const [viewStart, viewEnd] = viewBounds;
   const viewLength = viewEnd - viewStart;
 
-  const rawPoints = values
-    .map((value, i) => {
-      const yPercent = (value - minVal) / (maxVal - minVal);
-      return {
-        y: (1 - yPercent) * channelHeight,
-        x: viewStart + i * (viewLength / (values.length - 1)),
-      };
-    })
-    .filter(({ x }) => {
-      if (!visualViewBounds) {
-        return true;
-      }
-      return visualViewBounds[0] <= x && x <= visualViewBounds[1];
-    });
+  const rawPoints = values.map((value, i) => {
+    const yPercent = (value - minVal) / (maxVal - minVal);
+    return {
+      y: (1 - yPercent) * channelHeight,
+      x: viewStart + i * (viewLength / (values.length - 1)),
+    };
+  });
 
   // simplification should be relative to channelHeight and viewLength
   const simplificationAmount = 13; // (higher -> less simplification)
@@ -124,9 +117,10 @@ export const DataChannel: React.FC<Props> = ({
       g,
       dataLines,
       viewBounds,
-      colorAdjust = 0x000,
-      backgroundColor = 0x111111,
       xResolution = screenWidth,
+      lineStyle,
+      backgroundStyle,
+      colorAdjust = 0,
     }: {
       g: PIXI.Graphics;
       dataLines: DataLine[];
@@ -134,6 +128,8 @@ export const DataChannel: React.FC<Props> = ({
       xResolution?: number;
       colorAdjust?: number;
       backgroundColor?: number;
+      lineStyle: ILineStyleOptions;
+      backgroundStyle: { color: number; alpha?: number };
     }) => {
       const [viewStart, viewEnd] = viewBounds;
       const viewLength = viewEnd - viewStart;
@@ -143,7 +139,7 @@ export const DataChannel: React.FC<Props> = ({
       g.clear();
 
       // background
-      g.beginFill(backgroundColor, 1);
+      g.beginFill(backgroundStyle.color, backgroundStyle.alpha);
       g.drawRect(viewStart, 0, viewLength, height);
       g.endFill();
 
@@ -157,53 +153,33 @@ export const DataChannel: React.FC<Props> = ({
           1
         );
 
-        // TODO: adjust startPercent, endPercent by hard aggregate indexes (should this be done before we draw the background?)
-        const [viewStart2, viewEnd2] = [
-          Math.max(
-            Math.floor(viewBounds[0] / indexesPerPoint) * indexesPerPoint,
-            worldBounds[0]
-          ),
-          Math.min(
-            Math.ceil(viewBounds[1] / indexesPerPoint) * indexesPerPoint,
-            worldBounds[1]
-          ),
+        // Adjust to nearest indexesPerPoint so the aggregate values are consistent while panning.
+        const [startIndex2, endIndex2] = [
+          Math.floor(startIndex / indexesPerPoint) * indexesPerPoint,
+          Math.ceil(endIndex / indexesPerPoint) * indexesPerPoint,
         ];
 
-        const startPercent2 = viewStart2 / worldWidth;
-        const endPercent2 = viewEnd2 / worldWidth;
-        const startIndex2 = startPercent2 * rawData.length;
-        const endIndex2 = endPercent2 * rawData.length;
+        const data: number[] = chunk(
+          rawData.slice(startIndex2, endIndex2),
+          indexesPerPoint
+        ).map((values) => {
+          return max(values) || 0;
+        });
 
-        const rawDataInView = rawData.slice(startIndex2, endIndex2);
-        const data: number[] = chunk(rawDataInView, indexesPerPoint).map(
-          (values) => {
-            return max(values) || 0;
-          }
-        );
-
-        // question: can we filter the added points before sending them to `getRelativePoints`?
-        // maybe if we KNEW the bounds being added (calculate instead of floor/ceil)
-        //  x: viewStart + i * (viewLength / (values.length - 1)),
-        //  inVisual = visualViewBounds[0] <= x && x <= visualViewBounds[1];
-
-        // console.log("data length (before simplify)", data.length);
-
-        const points = getRelativePoints(
-          data,
-          height,
-          valueRange,
-          [viewStart2, viewEnd2],
-          viewBounds
-        );
+        /*
+          Data here will expand slightly past the drawn background.
+          Best solution is to draw the background according to the newly calculated width.
+         */
+        const viewStart2 = (startIndex2 * worldWidth) / rawData.length;
+        const viewEnd2 = (endIndex2 * worldWidth) / rawData.length;
+        const points = getRelativePoints(data, height, valueRange, [
+          viewStart2,
+          viewEnd2,
+        ]);
 
         renderCount += points.length;
 
-        g.lineStyle({
-          width: 1,
-          color: color + colorAdjust,
-          join: PIXI.LINE_JOIN.BEVEL,
-          native: true,
-        });
+        g.lineStyle({ ...lineStyle, color: color + colorAdjust });
         g.moveTo(points[0].x, points[0].y);
         points.forEach(({ x, y }) => {
           g.lineTo(x, y);
@@ -214,7 +190,7 @@ export const DataChannel: React.FC<Props> = ({
 
       return renderCount;
     },
-    [debugMode, height, screenWidth, worldBounds, worldWidth]
+    [height, screenWidth, worldBounds, worldWidth]
   );
 
   const drawLowResData = useCallback(
@@ -223,11 +199,18 @@ export const DataChannel: React.FC<Props> = ({
         g,
         dataLines,
         viewBounds: worldBounds,
-        backgroundColor: debugMode ? 0x222222 : undefined,
         xResolution: screenWidth * 2,
+        lineStyle: {
+          width: 1,
+          join: PIXI.LINE_JOIN.BEVEL,
+          native: true,
+        },
+        backgroundStyle: {
+          color: debugMode ? 0x222222 : 0x111111,
+        },
       });
     },
-    [buildGraphics, dataLines, debugMode, worldBounds]
+    [buildGraphics, dataLines, debugMode, screenWidth, worldBounds]
   );
 
   const drawHighResData = useCallback(
@@ -249,6 +232,15 @@ export const DataChannel: React.FC<Props> = ({
           dataLines,
           viewBounds: [viewStart, viewEnd],
           colorAdjust: debugMode ? 0xaaaaaa : undefined,
+          lineStyle: {
+            width: 1,
+            join: PIXI.LINE_JOIN.BEVEL,
+            native: true,
+          },
+          backgroundStyle: {
+            color: 0x111111,
+            alpha: debugMode ? 0.7 : undefined,
+          },
         });
         onPointsRendered(renderCount);
       }, 100);
