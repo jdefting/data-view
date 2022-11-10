@@ -32,7 +32,7 @@ const getRelativePoints = (
     const yPercent = (value - minVal) / (maxVal - minVal);
     return {
       y: (1 - yPercent) * channelHeight,
-      x: viewStart + i * (viewLength / (values.length - 1)),
+      x: viewStart + i * (viewLength / values.length),
     };
   });
 
@@ -156,7 +156,8 @@ export const DataChannel: React.FC<Props> = ({
         // Adjust to nearest indexesPerPoint so the aggregate values are consistent while panning.
         const [startIndex2, endIndex2] = [
           Math.floor(startIndex / indexesPerPoint) * indexesPerPoint,
-          Math.ceil(endIndex / indexesPerPoint) * indexesPerPoint,
+          Math.ceil(endIndex / indexesPerPoint) * indexesPerPoint +
+            indexesPerPoint,
         ];
 
         const data: number[] = chunk(
@@ -199,7 +200,7 @@ export const DataChannel: React.FC<Props> = ({
         g,
         dataLines,
         viewBounds: worldBounds,
-        xResolution: screenWidth * 2,
+        xResolution: screenWidth * 100,
         lineStyle: {
           width: 1,
           join: PIXI.LINE_JOIN.BEVEL,
