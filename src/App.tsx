@@ -1,6 +1,6 @@
 import "./App.css";
 import { LinearView } from "./components/LinearView";
-import { useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { useResizeDetector } from "react-resize-detector";
 
 const App = function App() {
@@ -8,6 +8,12 @@ const App = function App() {
   const [linesPerChannel, setLinesPerChannel] = useState(1);
   const [pointsRendered, setPointsRendered] = useState(0);
   const [debugMode, setDebugMode] = useState(false);
+  const [worldBounds, setWorldBounds] = useState<[number, number]>([0, 2000]);
+  const [worldStart, worldEnd] = worldBounds;
+
+  const [cursorX, setCursorX] = useState(0);
+  const [viewBounds, setViewBounds] = useState<[number, number]>([0, 50]);
+  const viewMidPoint = (viewBounds[1] - viewBounds[0]) / 2 + viewBounds[0];
 
   const { width, height, ref } = useResizeDetector({
     refreshMode: "debounce",
@@ -32,6 +38,8 @@ const App = function App() {
 
     return channels;
   }, [channelCount]);
+
+  const viewWidth = viewBounds[1] - viewBounds[0];
 
   return (
     <div
@@ -81,8 +89,54 @@ const App = function App() {
           {pointsRendered.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
         </div>
       </div>
-      <div className="h-2/3 w-11/12">
-        <div className="w-full h-full" ref={ref}>
+
+      <div className="flex flex-col h-2/3 w-11/12 gap-2">
+        <div className="flex flex-col">
+          <div className="flex w-full justify-between">
+            <div>{worldStart.toFixed()}</div>
+            <div>
+              {viewBounds[0].toFixed(2)} - {viewBounds[1].toFixed(2)} (
+              {viewWidth.toFixed()})
+            </div>
+            <div>{worldEnd.toFixed()}</div>
+          </div>
+          <input
+            className="w-full"
+            type="range"
+            min={worldStart}
+            max={worldEnd}
+            step={0.01}
+            value={viewMidPoint}
+            onChange={(e) => {
+              const viewLength = viewBounds[1] - viewBounds[0];
+              const targetMidpoint = parseFloat(e.currentTarget.value);
+
+              const halfViewLength = 0.5 * viewLength;
+              const leftTarget = targetMidpoint - halfViewLength;
+              const rightTarget = targetMidpoint + halfViewLength;
+
+              if (leftTarget < worldStart) {
+                setViewBounds([worldStart, worldStart + viewLength]);
+              } else if (rightTarget > worldEnd) {
+                setViewBounds([worldEnd - viewLength, worldEnd]);
+              } else {
+                setViewBounds([leftTarget, rightTarget]);
+              }
+            }}
+          />
+        </div>
+        <input
+          className="w-full"
+          type="range"
+          min={worldStart}
+          max={worldEnd}
+          step={0.01}
+          value={cursorX}
+          onChange={(e) => {
+            setCursorX(parseFloat(e.currentTarget.value));
+          }}
+        />
+        <div className="w-full grow" ref={ref}>
           {height && width && (
             // <LinearViewD3 height={height} width={width} />
             <LinearView
@@ -93,6 +147,11 @@ const App = function App() {
               pointsPerChannel={pointsPerChannel}
               linesPerChannel={linesPerChannel}
               renderedPointCountRef={renderedPointCount}
+              cursorX={cursorX}
+              onCursorChange={setCursorX}
+              onViewBoundsChange={setViewBounds}
+              viewBounds={viewBounds}
+              worldBounds={worldBounds}
             />
           )}
         </div>

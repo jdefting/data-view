@@ -13,6 +13,11 @@ interface Props {
   heightPixel: number;
   widthPixel: number;
   debugMode: boolean;
+  worldBounds: [number, number];
+  viewBounds: [number, number];
+  cursorX: number;
+  onCursorChange: (val: number) => void;
+  onViewBoundsChange: (bounds: [number, number]) => void;
 }
 
 export const LinearView: React.FC<Props> = ({
@@ -23,20 +28,15 @@ export const LinearView: React.FC<Props> = ({
   heightPixel,
   widthPixel,
   debugMode,
+  worldBounds,
+  viewBounds,
+  onCursorChange,
+  onViewBoundsChange,
+  cursorX,
 }) => {
   const viewportRef = useRef<PixiViewport>(null);
-
-  const [cursorX, setCursorX] = useState(0);
   const [cursorWidth, setCursorWidth] = useState(2);
-  const [worldBounds, setWorldBounds] = useState<[number, number]>([
-    0,
-    widthPixel * 2,
-    // 1000,
-  ]);
-  const [worldStart, worldEnd] = worldBounds;
-  const worldLength = worldEnd - worldStart;
-  const [viewBounds, setViewBounds] = useState<[number, number]>([0, 50]);
-  const viewMidPoint = (viewBounds[1] - viewBounds[0]) / 2 + viewBounds[0];
+  const worldLength = worldBounds[1] - worldBounds[0];
 
   const drawCursor = useCallback(
     (g: PIXI.Graphics) => {
@@ -66,45 +66,11 @@ export const LinearView: React.FC<Props> = ({
 
   const onMoved = useCallback((viewport) => {
     const { left, right } = viewport; // world pos
-    setViewBounds([left, right]);
+    onViewBoundsChange([left, right]);
   }, []);
-
-  const viewWidth = viewBounds[1] - viewBounds[0];
 
   return (
     <>
-      <div className="flex w-full justify-between">
-        <div>{worldStart.toFixed()}</div>
-        <div>
-          {viewBounds[0].toFixed(2)} - {viewBounds[1].toFixed(2)} (
-          {viewWidth.toFixed()})
-        </div>
-        <div>{worldEnd.toFixed()}</div>
-      </div>
-      <input
-        className="w-full"
-        type="range"
-        min={worldStart}
-        max={worldEnd}
-        step={0.01}
-        value={viewMidPoint}
-        onChange={(e) => {
-          const viewLength = viewBounds[1] - viewBounds[0];
-          const targetMidpoint = parseFloat(e.currentTarget.value);
-
-          const halfViewLength = 0.5 * viewLength;
-          const leftTarget = targetMidpoint - halfViewLength;
-          const rightTarget = targetMidpoint + halfViewLength;
-
-          if (leftTarget < worldStart) {
-            setViewBounds([worldStart, worldStart + viewLength]);
-          } else if (rightTarget > worldEnd) {
-            setViewBounds([worldEnd - viewLength, worldEnd]);
-          } else {
-            setViewBounds([leftTarget, rightTarget]);
-          }
-        }}
-      />
       <div
         onMouseMove={(e) => {
           if (!viewportRef.current) {
@@ -113,7 +79,7 @@ export const LinearView: React.FC<Props> = ({
 
           const { x } = e.currentTarget.getBoundingClientRect();
           const worldPosition = viewportRef.current.toWorld(e.clientX - x, 0);
-          setCursorX(worldPosition.x);
+          onCursorChange(worldPosition.x);
         }}
       >
         <Stage

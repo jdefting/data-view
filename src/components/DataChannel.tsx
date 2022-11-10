@@ -200,7 +200,7 @@ export const DataChannel: React.FC<Props> = ({
         g,
         dataLines,
         viewBounds: worldBounds,
-        xResolution: screenWidth * 100,
+        xResolution: screenWidth * 2,
         lineStyle: {
           width: 1,
           join: PIXI.LINE_JOIN.BEVEL,
