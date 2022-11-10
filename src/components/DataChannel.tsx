@@ -191,7 +191,7 @@ export const DataChannel: React.FC<Props> = ({
 
       return renderCount;
     },
-    [height, screenWidth, worldBounds, worldWidth]
+    [height, screenWidth, worldWidth]
   );
 
   const drawLowResData = useCallback(
