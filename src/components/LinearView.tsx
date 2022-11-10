@@ -66,8 +66,6 @@ export const LinearView: React.FC<Props> = ({
 
   const onMoved = useCallback((viewport) => {
     const { left, right } = viewport; // world pos
-    // console.log("onMoved - setViewBounds");
-
     setViewBounds([left, right]);
   }, []);
 

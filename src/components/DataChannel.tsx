@@ -143,7 +143,7 @@ export const DataChannel: React.FC<Props> = ({
       g.clear();
 
       // background
-      g.beginFill(backgroundColor, debugMode ? 0.5 : 1);
+      g.beginFill(backgroundColor, 1);
       g.drawRect(viewStart, 0, viewLength, height);
       g.endFill();
 

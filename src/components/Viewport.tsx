@@ -2,6 +2,7 @@ import React, { forwardRef } from "react";
 import { Viewport as PixiViewport } from "pixi-viewport";
 import * as PIXI from "pixi.js";
 import { PixiComponent, useApp } from "@inlet/react-pixi";
+import { isEqual } from "lodash-es";
 
 export interface ViewportProps {
   screenWidth: number;
@@ -31,6 +32,8 @@ const PixiComponentViewport = PixiComponent("Viewport", {
     onMovedEnd = () => null,
     viewBounds,
   }: PixiComponentViewportProps) => {
+    let lastBounds = [0, 0];
+
     const viewport = new PixiViewport({
       screenWidth,
       screenHeight,
@@ -52,9 +55,17 @@ const PixiComponentViewport = PixiComponent("Viewport", {
     viewport
       .on("zoomed", onZoomedEnd)
       .on("moved", ({ viewport }) => {
-        // TODO: don't move if new viewBounds = old view bounds
+        const { left, right } = viewport;
+        const outOfBounds = viewport.left < 0 || viewport.right > worldWidth;
+        const noMovement = isEqual([left, right], lastBounds);
+
+        if (outOfBounds || noMovement) {
+          // don't move if new viewBounds = old view bounds
+          return;
+        }
 
         onMoved(viewport);
+        lastBounds = [viewport.left, viewport.right];
       })
       .on("moved-end", onMovedEnd);
 
@@ -62,9 +73,6 @@ const PixiComponentViewport = PixiComponent("Viewport", {
       (viewBounds[1] - viewBounds[0]) / 2 + viewBounds[0],
       worldHeight / 2
     );
-
-    // culling?
-    // see https://codesandbox.io/s/inletreact-pixi-viewport-cull-3b5by?file=/src/PixiPage.tsx
 
     return viewport;
   },
