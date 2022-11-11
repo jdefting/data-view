@@ -3,7 +3,7 @@ import { Stage, Graphics } from "@inlet/react-pixi";
 import * as PIXI from "pixi.js";
 import { Viewport as PixiViewport } from "pixi-viewport";
 import { Viewport } from "./Viewport";
-import { DataChannel } from "./DataChannel";
+import { DataChannel, GraphMode } from "./DataChannel";
 
 interface Props {
   channels: number[];
@@ -19,6 +19,8 @@ interface Props {
   onCursorChange: (val: number) => void;
   onViewBoundsChange: (bounds: [number, number]) => void;
   simplifyLevel: number;
+  graphMode: GraphMode;
+  aggregateData: boolean;
 }
 
 export const LinearView: React.FC<Props> = ({
@@ -35,6 +37,8 @@ export const LinearView: React.FC<Props> = ({
   onViewBoundsChange,
   cursorX,
   simplifyLevel,
+  graphMode,
+  aggregateData,
 }) => {
   const viewportRef = useRef<PixiViewport>(null);
   const [cursorWidth, setCursorWidth] = useState(2);
@@ -111,6 +115,7 @@ export const LinearView: React.FC<Props> = ({
               return (
                 <DataChannel
                   key={id}
+                  aggregateData={aggregateData}
                   dataCount={pointsPerChannel}
                   lineCount={linesPerChannel}
                   height={channelHeight}
@@ -124,6 +129,7 @@ export const LinearView: React.FC<Props> = ({
                   worldBounds={worldBounds}
                   debugMode={debugMode}
                   simplifyLevel={simplifyLevel}
+                  graphMode={graphMode}
                 />
               );
             })}

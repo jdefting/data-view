@@ -57,14 +57,16 @@ interface DataLine {
   valueRange: [number, number];
 }
 
+export type GraphMode = "line" | "column";
+
 // used to get width relative to screen size, not necessary if we use native lines
-// const getLineWidth = (
-//   screenWidth: number,
-//   worldViewBounds: [number, number]
-// ) => {
-//   const viewWidth = worldViewBounds[1] - worldViewBounds[0];
-//   return 2 * (viewWidth / screenWidth);
-// };
+const getLineWidth = (
+  screenWidth: number,
+  worldViewBounds: [number, number]
+) => {
+  const viewWidth = worldViewBounds[1] - worldViewBounds[0];
+  return 2 * (viewWidth / screenWidth);
+};
 
 interface Props {
   dataCount: number;
@@ -79,6 +81,8 @@ interface Props {
   worldBounds: [number, number];
   debugMode: boolean;
   simplifyLevel: number;
+  graphMode: GraphMode;
+  aggregateData: boolean;
 }
 
 export const DataChannel: React.FC<Props> = ({
@@ -92,6 +96,8 @@ export const DataChannel: React.FC<Props> = ({
   debugMode,
   screenWidth,
   simplifyLevel,
+  graphMode,
+  aggregateData,
 }) => {
   const highResTimeout = useRef<NodeJS.Timeout>();
   const rawDataCache = useRef<number[][]>([]);
@@ -161,48 +167,71 @@ export const DataChannel: React.FC<Props> = ({
           1
         );
 
-        // Adjust to nearest indexesPerPoint so the aggregate values are consistent while panning.
-        const [startIndex2, endIndex2] = [
-          Math.floor(startIndex / indexesPerPoint) * indexesPerPoint,
-          Math.ceil(endIndex / indexesPerPoint) * indexesPerPoint +
-            indexesPerPoint,
-        ];
+        let windowBounds: [number, number];
+        let dataInView: number[];
+        if (aggregateData) {
+          // Adjust to nearest indexesPerPoint so the aggregate values are consistent while panning.
+          const [startIndex2, endIndex2] = [
+            Math.floor(startIndex / indexesPerPoint) * indexesPerPoint,
+            Math.ceil(endIndex / indexesPerPoint) * indexesPerPoint +
+              indexesPerPoint,
+          ];
 
-        const data: number[] = chunk(
-          rawData.slice(startIndex2, endIndex2),
-          indexesPerPoint
-        ).map((values) => {
-          return max(values) || 0;
-        });
+          dataInView = chunk(
+            rawData.slice(startIndex2, endIndex2),
+            indexesPerPoint
+          ).map((values) => {
+            return max(values) || 0;
+          });
 
-        /*
+          /*
           Data here will expand slightly past the drawn background.
           Best solution is to draw the background according to the newly calculated width.
          */
-        const viewStart2 = (startIndex2 * worldWidth) / rawData.length;
-        const viewEnd2 = (endIndex2 * worldWidth) / rawData.length;
+          const viewStart2 = (startIndex2 * worldWidth) / rawData.length;
+          const viewEnd2 = (endIndex2 * worldWidth) / rawData.length;
+          windowBounds = [viewStart2, viewEnd2];
+        } else {
+          dataInView = rawData.slice(startIndex, endIndex);
+          windowBounds = viewBounds;
+        }
+
         const points = getRelativePoints(
-          data,
+          dataInView,
           height,
           valueRange,
-          [viewStart2, viewEnd2],
+          windowBounds,
           simplifyLevel
         );
 
         renderCount += points.length;
 
-        g.lineStyle({ ...lineStyle, color: color + colorAdjust });
-        g.moveTo(points[0].x, points[0].y);
-        points.forEach(({ x, y }) => {
-          g.lineTo(x, y);
-        });
+        const dataColor = color + colorAdjust;
+
+        if (graphMode === "line") {
+          g.lineStyle({ ...lineStyle, color: dataColor });
+          g.moveTo(points[0].x, points[0].y);
+          points.forEach(({ x, y }) => {
+            g.lineTo(x, y);
+          });
+        }
+
+        if (graphMode === "column") {
+          const columnWidth = points.length / screenWidth;
+          g.beginFill(dataColor);
+
+          points.forEach(({ x, y }) => {
+            g.drawRect(x, y, columnWidth, height - y);
+          });
+          g.endFill();
+        }
       });
 
       console.timeEnd("build-graphics");
 
       return renderCount;
     },
-    [height, screenWidth, simplifyLevel, worldWidth]
+    [aggregateData, graphMode, height, screenWidth, simplifyLevel, worldWidth]
   );
 
   const drawLowResData = useCallback(

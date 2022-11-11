@@ -2,12 +2,14 @@ import "./App.css";
 import { LinearView } from "./components/LinearView";
 import React, { useMemo, useRef, useState } from "react";
 import { useResizeDetector } from "react-resize-detector";
+import { GraphMode } from "./components/DataChannel";
 
 const App = function App() {
   const [channelCount, setChannelCount] = useState(1);
   const [linesPerChannel, setLinesPerChannel] = useState(1);
   const [pointsRendered, setPointsRendered] = useState(0);
   const [debugMode, setDebugMode] = useState(false);
+  const [aggregateData, setAggregateData] = useState(true);
   const [simplifyLevel, setSimplifyLevel] = useState(0);
   const [worldBounds, setWorldBounds] = useState<[number, number]>([0, 2000]);
   const [worldStart, worldEnd] = worldBounds;
@@ -15,6 +17,7 @@ const App = function App() {
   const [cursorX, setCursorX] = useState(0);
   const [viewBounds, setViewBounds] = useState<[number, number]>([0, 50]);
   const viewMidPoint = (viewBounds[1] - viewBounds[0]) / 2 + viewBounds[0];
+  const [graphMode, setGraphMode] = useState<GraphMode>("line");
 
   const { width, height, ref } = useResizeDetector({
     refreshMode: "debounce",
@@ -42,6 +45,10 @@ const App = function App() {
 
   const viewWidth = viewBounds[1] - viewBounds[0];
 
+  const resetRenderCount = () => {
+    renderedPointCount.current = 0;
+  };
+
   return (
     <div
       className="App flex flex-col items-center justify-center gap-3 bg-gray-900 text-gray-100"
@@ -50,13 +57,27 @@ const App = function App() {
         width: "100vw",
       }}
     >
-      <div className="flex gap-3 flex-col  border border-gray-600 p-2 ">
+      <div className="flex gap-1 flex-col  border border-gray-600 p-2 ">
         <div>
           Debug Mode:{" "}
           <input
             type="checkbox"
-            onChange={(e) => setDebugMode(e.currentTarget.checked)}
+            onChange={(e) => {
+              resetRenderCount();
+              setDebugMode(e.currentTarget.checked);
+            }}
             checked={debugMode}
+          />
+        </div>
+        <div>
+          Aggregate Data:{" "}
+          <input
+            type="checkbox"
+            onChange={(e) => {
+              resetRenderCount();
+              setAggregateData(e.currentTarget.checked);
+            }}
+            checked={aggregateData}
           />
         </div>
         <div>
@@ -67,11 +88,38 @@ const App = function App() {
             max={1}
             step={0.01}
             onChange={(e) => {
-              renderedPointCount.current = 0;
+              resetRenderCount();
               setSimplifyLevel(parseFloat(e.currentTarget.value));
             }}
             value={simplifyLevel}
           />
+        </div>
+        <div className="flex gap-1">
+          Mode:{" "}
+          <input
+            type="radio"
+            id="line"
+            name="graph_mode"
+            value="line"
+            checked={graphMode === "line"}
+            onChange={() => {
+              resetRenderCount();
+              setGraphMode("line");
+            }}
+          />
+          <label htmlFor="line">Line Chart</label>
+          <input
+            type="radio"
+            id="column"
+            name="graph_mode"
+            value="column"
+            checked={graphMode === "column"}
+            onChange={() => {
+              resetRenderCount();
+              setGraphMode("column");
+            }}
+          />
+          <label htmlFor="column">Column Chart</label>
         </div>
         <div>
           Channels:{" "}
@@ -79,6 +127,7 @@ const App = function App() {
             type="number"
             value={channelCount}
             onChange={(e) => {
+              resetRenderCount();
               setChannelCount(parseInt(e.currentTarget.value));
             }}
           />
@@ -89,6 +138,7 @@ const App = function App() {
             type="number"
             value={linesPerChannel}
             onChange={(e) => {
+              resetRenderCount();
               setLinesPerChannel(parseInt(e.currentTarget.value));
             }}
           />
@@ -168,6 +218,8 @@ const App = function App() {
               viewBounds={viewBounds}
               worldBounds={worldBounds}
               simplifyLevel={simplifyLevel}
+              graphMode={graphMode}
+              aggregateData={aggregateData}
             />
           )}
         </div>
