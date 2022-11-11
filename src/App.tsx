@@ -8,6 +8,7 @@ const App = function App() {
   const [linesPerChannel, setLinesPerChannel] = useState(1);
   const [pointsRendered, setPointsRendered] = useState(0);
   const [debugMode, setDebugMode] = useState(false);
+  const [simplifyLevel, setSimplifyLevel] = useState(0);
   const [worldBounds, setWorldBounds] = useState<[number, number]>([0, 2000]);
   const [worldStart, worldEnd] = worldBounds;
 
@@ -56,6 +57,20 @@ const App = function App() {
             type="checkbox"
             onChange={(e) => setDebugMode(e.currentTarget.checked)}
             checked={debugMode}
+          />
+        </div>
+        <div>
+          Simplify Data:{" "}
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            onChange={(e) => {
+              renderedPointCount.current = 0;
+              setSimplifyLevel(parseFloat(e.currentTarget.value));
+            }}
+            value={simplifyLevel}
           />
         </div>
         <div>
@@ -125,17 +140,17 @@ const App = function App() {
             }}
           />
         </div>
-        <input
-          className="w-full"
-          type="range"
-          min={worldStart}
-          max={worldEnd}
-          step={0.01}
-          value={cursorX}
-          onChange={(e) => {
-            setCursorX(parseFloat(e.currentTarget.value));
-          }}
-        />
+        {/*<input*/}
+        {/*  className="w-full"*/}
+        {/*  type="range"*/}
+        {/*  min={worldStart}*/}
+        {/*  max={worldEnd}*/}
+        {/*  step={0.01}*/}
+        {/*  value={cursorX}*/}
+        {/*  onChange={(e) => {*/}
+        {/*    setCursorX(parseFloat(e.currentTarget.value));*/}
+        {/*  }}*/}
+        {/*/>*/}
         <div className="w-full grow" ref={ref}>
           {height && width && (
             // <LinearViewD3 height={height} width={width} />
@@ -152,6 +167,7 @@ const App = function App() {
               onViewBoundsChange={setViewBounds}
               viewBounds={viewBounds}
               worldBounds={worldBounds}
+              simplifyLevel={simplifyLevel}
             />
           )}
         </div>

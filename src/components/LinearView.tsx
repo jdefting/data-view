@@ -18,6 +18,7 @@ interface Props {
   cursorX: number;
   onCursorChange: (val: number) => void;
   onViewBoundsChange: (bounds: [number, number]) => void;
+  simplifyLevel: number;
 }
 
 export const LinearView: React.FC<Props> = ({
@@ -33,6 +34,7 @@ export const LinearView: React.FC<Props> = ({
   onCursorChange,
   onViewBoundsChange,
   cursorX,
+  simplifyLevel,
 }) => {
   const viewportRef = useRef<PixiViewport>(null);
   const [cursorWidth, setCursorWidth] = useState(2);
@@ -121,6 +123,7 @@ export const LinearView: React.FC<Props> = ({
                   }}
                   worldBounds={worldBounds}
                   debugMode={debugMode}
+                  simplifyLevel={simplifyLevel}
                 />
               );
             })}

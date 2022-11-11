@@ -22,7 +22,8 @@ const getRelativePoints = (
   channelHeight: number,
   valueRange: [number, number],
   // world units
-  viewBounds: [number, number]
+  viewBounds: [number, number],
+  simplifyLevel: number
 ): Point[] => {
   const [minVal, maxVal] = valueRange;
   const [viewStart, viewEnd] = viewBounds;
@@ -37,12 +38,17 @@ const getRelativePoints = (
   });
 
   // simplification should be relative to channelHeight and viewLength
-  const simplificationAmount = 13; // (higher -> less simplification)
-  const relativeTolerance =
-    channelHeight * viewLength * simplificationAmount ** -5;
+  // const simplificationAmount = 13; // (higher -> less simplification)
 
-  // return simplify(rawPoints, relativeTolerance);
-  return rawPoints;
+  if (simplifyLevel === 0) {
+    return rawPoints;
+  } else {
+    const simplificationAmount = 10 + (1 - simplifyLevel) * 10;
+    const relativeTolerance =
+      channelHeight * viewLength * simplificationAmount ** -5;
+
+    return simplify(rawPoints, relativeTolerance);
+  }
 };
 
 interface DataLine {
@@ -72,6 +78,7 @@ interface Props {
   onPointsRendered: (count: number) => void;
   worldBounds: [number, number];
   debugMode: boolean;
+  simplifyLevel: number;
 }
 
 export const DataChannel: React.FC<Props> = ({
@@ -84,6 +91,7 @@ export const DataChannel: React.FC<Props> = ({
   worldBounds,
   debugMode,
   screenWidth,
+  simplifyLevel,
 }) => {
   const highResTimeout = useRef<NodeJS.Timeout>();
   const rawDataCache = useRef<number[][]>([]);
@@ -173,10 +181,13 @@ export const DataChannel: React.FC<Props> = ({
          */
         const viewStart2 = (startIndex2 * worldWidth) / rawData.length;
         const viewEnd2 = (endIndex2 * worldWidth) / rawData.length;
-        const points = getRelativePoints(data, height, valueRange, [
-          viewStart2,
-          viewEnd2,
-        ]);
+        const points = getRelativePoints(
+          data,
+          height,
+          valueRange,
+          [viewStart2, viewEnd2],
+          simplifyLevel
+        );
 
         renderCount += points.length;
 
@@ -191,7 +202,7 @@ export const DataChannel: React.FC<Props> = ({
 
       return renderCount;
     },
-    [height, screenWidth, worldWidth]
+    [height, screenWidth, simplifyLevel, worldWidth]
   );
 
   const drawLowResData = useCallback(
