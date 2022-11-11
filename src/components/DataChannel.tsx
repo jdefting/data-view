@@ -37,15 +37,21 @@ const getRelativePoints = (
     };
   });
 
-  // simplification should be relative to channelHeight and viewLength
-  // const simplificationAmount = 13; // (higher -> less simplification)
-
   if (simplifyLevel === 0) {
     return rawPoints;
   } else {
+    // this calculation is very arbitrary and doesn't scale correctly, need something better
+    // simplification should be relative to channelHeight and viewLength (coord plain the points live on)
+    // higher view length -> less simplification -> lower tolerance
+    // higher channel height -> more simplification -> higher tolerance
+
     const simplificationAmount = 10 + (1 - simplifyLevel) * 10;
     const relativeTolerance =
       channelHeight * viewLength * simplificationAmount ** -5;
+
+    // console.log(
+    //   `tolerance: ${relativeTolerance}, width: ${viewLength}, height: ${channelHeight}, screenWidth: ${screenWidth}`
+    // );
 
     return simplify(rawPoints, relativeTolerance);
   }
@@ -60,13 +66,13 @@ interface DataLine {
 export type GraphMode = "line" | "column";
 
 // used to get width relative to screen size, not necessary if we use native lines
-const getLineWidth = (
-  screenWidth: number,
-  worldViewBounds: [number, number]
-) => {
-  const viewWidth = worldViewBounds[1] - worldViewBounds[0];
-  return 2 * (viewWidth / screenWidth);
-};
+// const getLineWidth = (
+//   screenWidth: number,
+//   worldViewBounds: [number, number]
+// ) => {
+//   const viewWidth = worldViewBounds[1] - worldViewBounds[0];
+//   return 2 * (viewWidth / screenWidth);
+// };
 
 interface Props {
   dataCount: number;
